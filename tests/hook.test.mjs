@@ -21,6 +21,7 @@ import {
   DEFAULT_CONFIG,
   SENSITIVE_PATH,
   GENERATED_PATH,
+  isGeneratedPath,
   truthy,
   getConfigPath,
   getLocalConfigPath,
@@ -157,6 +158,72 @@ describe('SENSITIVE_PATH / GENERATED_PATH', () => {
     ]) {
       assert.ok(!GENERATED_PATH.test(p), `unexpected generated: ${p}`);
     }
+  });
+});
+
+describe('isGeneratedPath (project-relative)', () => {
+  // The bug this guards: GENERATED_PATH was tested against the ABSOLUTE path,
+  // so a directory ANCESTRAL to the project could match and every file in the
+  // project skipped as generated — the hook silently inert. Seen on a CI
+  // runner checking out under `/var/lib/forgejo-runner/.cache/act/<h>/...`.
+  it('ignores a generated-looking ancestor ABOVE the project root', () => {
+    const cwd = '/var/lib/forgejo-runner/.cache/act/abc123/hostexecutor';
+    for (const rel of ['src/Card.tsx', 'app/page.tsx', 'index.html']) {
+      const abs = `${cwd}/${rel}`;
+      // The absolute form matches — that is the bug, asserted so this test
+      // fails loudly if GENERATED_PATH itself is ever changed out from under it.
+      assert.ok(GENERATED_PATH.test(abs), `precondition: ${abs} matches absolutely`);
+      assert.equal(isGeneratedPath(abs, cwd), false, `should be scanned: ${abs}`);
+    }
+  });
+
+  // NEGATIVE CONTROLS. Relativizing alone — without restoring the leading
+  // separator — flips these from skipped to scanned, because GENERATED_PATH is
+  // separator-anchored on both sides and a project-relative path has none at
+  // its root. `node_modules` is the worst case: the tree the gate most
+  // obviously exists to exclude. A patch that proves only the positive above
+  // ships this second, quieter bug.
+  it('still skips TOP-LEVEL generated directories', () => {
+    const cwd = '/home/me/project';
+    for (const rel of [
+      'node_modules/lib/index.tsx',
+      'dist/Card.tsx',
+      'build/index.html',
+      'out/page.js',
+      '.next/server.js',
+      '.cache/blob.js',
+      'coverage/report.html',
+      'generated/schema.ts',
+    ]) {
+      assert.equal(isGeneratedPath(`${cwd}/${rel}`, cwd), true, `should be skipped: ${rel}`);
+    }
+  });
+
+  it('still skips NESTED generated directories', () => {
+    const cwd = '/home/me/project';
+    for (const rel of [
+      'src/dist/Card.tsx',
+      'packages/ui/node_modules/x/index.tsx',
+      'app/generated/api.tsx',
+    ]) {
+      assert.equal(isGeneratedPath(`${cwd}/${rel}`, cwd), true, `should be skipped: ${rel}`);
+    }
+  });
+
+  it('still scans authored files inside an ordinary project', () => {
+    const cwd = '/home/me/project';
+    for (const rel of ['src/Card.tsx', 'src/generated-utils.ts', 'src/CodeGenerator.tsx']) {
+      assert.equal(isGeneratedPath(`${cwd}/${rel}`, cwd), false, `should be scanned: ${rel}`);
+    }
+  });
+
+  // The two hook-lib call sites run the generated gate BEFORE the containment
+  // check, so out-of-project paths still reach this helper and must behave
+  // exactly as they did when the test was absolute.
+  it('falls back to absolute matching for paths outside the project', () => {
+    const cwd = '/home/me/project';
+    assert.equal(isGeneratedPath('/elsewhere/dist/Card.tsx', cwd), true);
+    assert.equal(isGeneratedPath('/elsewhere/src/Card.tsx', cwd), false);
   });
 });
 
