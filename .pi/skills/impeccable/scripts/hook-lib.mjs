@@ -1195,7 +1195,7 @@ function quoteCommandArg(value) {
   return `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
-function relativize(filePath, cwd) {
+export function relativize(filePath, cwd) {
   try {
     const rel = path.relative(cwd, filePath);
     if (!rel || rel.startsWith('..')) return filePath;
@@ -1203,6 +1203,30 @@ function relativize(filePath, cwd) {
   } catch {
     return filePath;
   }
+}
+
+// Test GENERATED_PATH against the path *relative to the project*, never the
+// absolute one. Matching absolutely lets an ANCESTOR of the project decide:
+// a checkout under `~/.cache/`, `/var/.../dist/`, or any directory named
+// `node_modules`, `build`, `out`, `.next`, `coverage` or `generated` makes
+// every file in that project test as generated, and the hook goes silently
+// inert. Measured on a CI runner that checks out under
+// `/var/lib/forgejo-runner/.cache/act/<hash>/hostexecutor`.
+//
+// The leading `/` is load-bearing and is NOT cosmetic. GENERATED_PATH is
+// separator-anchored on both sides, and a project-relative path has no
+// separator at its root — so relativizing alone would flip TOP-LEVEL
+// `dist/`, `build/`, `out/`, `.next/`, `.cache/`, `coverage/`,
+// `node_modules/` and `generated/` from skipped to scanned, `node_modules`
+// being the tree this gate most obviously exists to exclude. Restoring the
+// separator keeps top-level and nested cases both matching, and confines the
+// match to at-or-below `projectCwd`.
+//
+// Out-of-project paths are unchanged: `relativize` falls back to the absolute
+// path when the target is outside `cwd`, which matters at the two call sites
+// in this file where the generated gate runs BEFORE the containment check.
+export function isGeneratedPath(filePath, projectCwd) {
+  return GENERATED_PATH.test(`/${relativize(filePath, projectCwd)}`);
 }
 
 // Codex `apply_patch` exposes the raw patch in `tool_input.command`, not
@@ -1865,7 +1889,7 @@ export async function runHook({ stdinJson, env = {}, cwd = process.cwd(), now = 
         lastSkip = 'sensitive';
         continue;
       }
-      if (GENERATED_PATH.test(filePath)) {
+      if (isGeneratedPath(filePath, projectCwd)) {
         lastSkip = 'generated';
         continue;
       }
@@ -2244,7 +2268,7 @@ export async function runStopHook({ stdinJson, env = {}, cwd = process.cwd(), no
     for (const filePath of touched) {
       if (scanned >= STOP_MAX_FILES) break;
       if (hasPathTraversal(filePath) || SENSITIVE_PATH.test(filePath)) continue;
-      if (GENERATED_PATH.test(filePath)) continue;
+      if (isGeneratedPath(filePath, projectCwd)) continue;
       const ext = path.extname(filePath).toLowerCase();
       const configuredExt = matchConfiguredExtension(filePath, config.extensions);
       if (!ALLOWED_EXTS.has(ext) && !configuredExt) continue;
