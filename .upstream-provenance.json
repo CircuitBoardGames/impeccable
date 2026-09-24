@@ -1,6 +1,6 @@
 {
   "true_upstream": "https://github.com/pbakaus/impeccable",
   "true_upstream_branch": "main",
-  "last_synced_upstream_sha": "2149fcce39a90bb409df5f16515f316a76dc6199",
+  "last_synced_upstream_sha": "e0881d2de397d5e9761d7b35ff5017d8f5ebf69b",
   "note": "Provenance marker for the CircuitBoardGames/ClaudeCode maintainer agent's P2 vendor-sync drift check (hub#1518). It lives on `hub`, the branch the hub vendors; this fork's `main` tracks upstream. last_synced_upstream_sha is `hub`'s merge-base with true_upstream. Advance it in each true-upstream->hub sync PR. The fork's divergence on `hub`: impeccable-asset-producer finds the engine without assuming a plugin install (hub#1264), and .forgejo/ (the fork's own gate). Upstream drift after 2149fcce was deliberately NOT taken on 2026-09-23 (operator: it moves SkillSpector 45 -> 85); a sync PR is where it gets reviewed."
 }
