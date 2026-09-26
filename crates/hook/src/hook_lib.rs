@@ -75,8 +75,23 @@ pub fn is_sensitive_path(p: &str) -> bool {
     SENSITIVE_PATH_RE.is_match(p)
 }
 
+/// The bare pattern. Callers holding a real file path want `is_generated_path_in`:
+/// matched against an ABSOLUTE path, the separator-anchored directory names also
+/// match the project's ANCESTORS, so a project under `.cache/`, `dist/`, `build/`
+/// etc. has every file skipped as generated, silently.
 pub fn is_generated_path(p: &str) -> bool {
     GENERATED_PATH_RE.is_match(p)
+}
+
+/// `is_generated_path` against the path relative to `project_cwd`.
+///
+/// The leading separator is load-bearing: GENERATED_PATH is separator-anchored and a
+/// relative path has none at its root, so without it a top-level `dist/`, `build/`,
+/// `node_modules/` ... would flip from skipped to scanned. A path outside the project
+/// keeps its absolute form (`relativize` falls back to it), so out-of-project
+/// behaviour is unchanged.
+pub fn is_generated_path_in(rt: &Runtime, file_path: &str, project_cwd: &str) -> bool {
+    is_generated_path(&format!("/{}", relativize(rt, file_path, project_cwd)))
 }
 
 /// JS: truthy(value) — `/^(1|true|yes|on)$/i` on a string (no trim).
