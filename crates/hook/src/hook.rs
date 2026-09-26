@@ -196,7 +196,7 @@ pub fn run_hook(rt: &Runtime, stdin: &str) -> RunResult {
             last_skip = "sensitive";
             continue;
         }
-        if is_generated_path(file_path) {
+        if is_generated_path_in(rt, file_path, &project_cwd) {
             last_skip = "generated";
             continue;
         }
@@ -684,7 +684,7 @@ pub fn run_stop_hook(rt: &Runtime, stdin: &str) -> RunResult {
         }
         if has_path_traversal(file_path)
             || is_sensitive_path(file_path)
-            || is_generated_path(file_path)
+            || is_generated_path_in(rt, file_path, &project_cwd)
         {
             continue;
         }

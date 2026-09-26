@@ -177,7 +177,7 @@ fn read_existing_project_file(rt: &Runtime, file_path: &str, cwd: &str) -> Optio
     if !is_scan_target_inside_project(rt, file_path, cwd) {
         return None;
     }
-    if is_sensitive_path(file_path) || is_generated_path(file_path) {
+    if is_sensitive_path(file_path) || is_generated_path_in(rt, file_path, cwd) {
         return None;
     }
     read_regular_file_capped(file_path)
@@ -352,7 +352,7 @@ fn shell_copied_file_content(rt: &Runtime, command: &str, cwd: &str) -> String {
     if !is_scan_target_inside_project(rt, &source_path, cwd) {
         return String::new();
     }
-    if is_sensitive_path(&source_path) || is_generated_path(&source_path) {
+    if is_sensitive_path(&source_path) || is_generated_path_in(rt, &source_path, cwd) {
         return String::new();
     }
     read_regular_file_capped(&source_path).unwrap_or_default()
@@ -748,7 +748,7 @@ fn main_flow(rt: &Runtime, stdin: &str) -> Out {
     if is_sensitive_path(&file_path) {
         return skip(&audit, "sensitive");
     }
-    if is_generated_path(&file_path) {
+    if is_generated_path_in(rt, &file_path, &cwd) {
         return skip(&audit, "generated");
     }
 
