@@ -678,6 +678,96 @@ fn sensitive_and_generated_paths() {
     }
 }
 
+// GENERATED_PATH is separator-anchored, so matched against an ABSOLUTE path it also
+// matches the project's ancestors: every file of a project rooted under `.cache/`,
+// `dist/`, `build/` ... was skipped as generated, silently. Both bug shapes have an
+// arm here: absolute matching fails the ancestor rows, and dropping the leading
+// separator fails the top-level rows.
+#[test]
+fn generated_path_is_judged_relative_to_the_project() {
+    let r = rt("/work");
+    for (file, cwd, expected) in [
+        // an ancestor named like a generated dir does not make the project generated
+        (
+            "/home/u/.cache/act/abc/src/App.tsx",
+            "/home/u/.cache/act/abc",
+            false,
+        ),
+        ("/srv/dist/site/src/App.tsx", "/srv/dist/site", false),
+        (
+            "/opt/node_modules/app/src/App.tsx",
+            "/opt/node_modules/app",
+            false,
+        ),
+        // a TOP-LEVEL generated dir inside the project still is one
+        (
+            "/home/u/.cache/act/abc/dist/App.js",
+            "/home/u/.cache/act/abc",
+            true,
+        ),
+        ("/p/node_modules/lib/index.tsx", "/p", true),
+        ("/p/build/index.html", "/p", true),
+        // nested, and the file-name forms, as before
+        ("/p/src/generated/schema.ts", "/p", true),
+        ("/p/src/types.d.ts", "/p", true),
+        ("/p/src/generateReport.ts", "/p", false),
+        // outside the project the path stays absolute: behaviour unchanged
+        ("/elsewhere/dist/App.js", "/p", true),
+        ("/elsewhere/src/App.tsx", "/p", false),
+    ] {
+        assert_eq!(
+            is_generated_path_in(&r, file, cwd),
+            expected,
+            "{file} in {cwd}"
+        );
+    }
+}
+
+// The same bug end to end, through all three entry points: a project whose ROOT sits
+// under `.cache/` (a CI runner's act cache is the measured case) must still be
+// scanned, while its own top-level `dist/` stays skipped.
+#[test]
+fn a_project_under_a_generated_named_ancestor_is_still_scanned() {
+    for mode in ["post", "before", "stop"] {
+        for (rel, expected) in [("src/title.css", true), ("dist/title.css", false)] {
+            let t = Tmp::new();
+            t.write(".cache/proj/package.json", "{}");
+            let cwd = format!("{}/.cache/proj", t.path());
+            let file = t.write(&format!(".cache/proj/{rel}"), GRADIENT_CSS);
+            let r = rt(&cwd);
+            let out = match mode {
+                "post" => hook::run_hook(&r, &edit_event(&cwd, &file, "s1")).stdout,
+                "before" => {
+                    std::fs::remove_file(&file).unwrap();
+                    hbe(
+                        &r,
+                        &cursor(
+                            &cwd,
+                            "Write",
+                            json!({
+                                "file_path": file, "content": GRADIENT_CSS,
+                            }),
+                        ),
+                    )
+                    .0
+                }
+                "stop" => {
+                    let mut cache = read_cache(&cwd);
+                    touch_file(&mut cache, "s1", &file);
+                    persist_cache(&r, &cwd, &cache);
+                    hook::run_stop_hook(&r, &stop_event(&cwd, "s1")).stdout
+                }
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                out.contains("gradient-text"),
+                expected,
+                "{mode} {rel}: {out}"
+            );
+        }
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn inside_project_handles_symlinks_and_unwritten_files() {
