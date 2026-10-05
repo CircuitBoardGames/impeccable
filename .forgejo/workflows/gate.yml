@@ -12,5 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: No conflict markers
+        run: |
+          rc=0; git grep -nE '^(<<<<<<<|>>>>>>>)( |$)' || rc=$?
+          [ "$rc" -eq 1 ] || { echo "conflict markers above, or git grep failed (rc=$rc)"; exit 1; }
       - name: Agents and skills parse, and no agent needs a plugin install
         run: python3 .forgejo/gate.py
