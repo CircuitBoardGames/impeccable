@@ -43,6 +43,13 @@ pub fn extract_section(text: &str, name: &str) -> Option<String> {
     Some(body[start..=end].join("\n"))
 }
 
+/// Whether a surface of this mode builds in code by default. Image comps of
+/// working screens and documents rate below their code-led builds, so those
+/// modes are code-led whatever build path the project recorded.
+pub fn code_led_mode(mode: &str) -> bool {
+    matches!(mode, "operate" | "read")
+}
+
 /// The MODE RULES block for `mode`, or the one-line fallback naming the file
 /// when it cannot be read or lacks a section. Never fails the roll.
 pub fn mode_rules_block(env: &Env, cwd: &str, mode: &str) -> String {
@@ -57,6 +64,44 @@ pub fn mode_rules_block(env: &Env, cwd: &str, mode: &str) -> String {
         Some((directions, comps)) => fill(t::MODE_RULES_BLOCK, &[("MODE", mode), ("PATH", &shown), ("DIRECTIONS", &directions), ("COMPS", &comps)]),
         None => fill(t::MODE_RULES_UNAVAILABLE, &[("PATH", &shown)]),
     }
+}
+
+/// The PRESENTATION block printed after every roll: new-work.md's decision
+/// round, condensed. `build_path` is the recorded default and its file.
+pub fn presentation_block(env: &Env, cwd: &str, scope: &str, reroll: usize, degraded: bool, register: Option<&str>, mode: Option<&str>, build_path: Option<&(String, String)>) -> String {
+    let sq = crate::provider::detect(env, cwd).verb_cmd("serve-question");
+    let present = fill(if reroll > 0 { t::PRESENT_REROLL } else { t::PRESENT_FIRST }, &[("SQ", &sq)]);
+    // Operate and Read surfaces build in code whatever the project records;
+    // the recorded default governs Persuade and Experience.
+    let mode_code = mode.filter(|m| code_led_mode(m));
+    let code_led = mode_code.is_some() || build_path.map(|(v, _)| v == "code").unwrap_or(false);
+    // A degraded roll is one text-only card, except the safer register,
+    // whose lineup of grounded candidates plus canon is a full hand.
+    let single_card = degraded && register != Some("safer");
+    let comps = match (scope, single_card, code_led) {
+        ("direction", true, _) => t::COMPS_DIRECTION_DEGRADED,
+        ("direction", false, true) => t::COMPS_DIRECTION_CODE,
+        ("direction", false, false) => t::COMPS_DIRECTION,
+        (_, _, true) => t::COMPS_SURFACE_CODE,
+        _ => t::COMPS_SURFACE,
+    };
+    let build = match (mode_code, build_path) {
+        (Some(m), recorded) => {
+            let recorded = match recorded {
+                Some((value, source)) if value != "code" => format!(" (the recorded default {} from {} governs Persuade and Experience surfaces)", value, source),
+                _ => String::new(),
+            };
+            fill(t::BUILD_PATH_MODE, &[("MODE", m), ("RECORDED", &recorded)])
+        }
+        (None, Some((value, source))) => fill(t::BUILD_PATH_RECORDED, &[("VALUE", value), ("SOURCE", source)]),
+        (None, None) => t::BUILD_PATH_NONE.to_string(),
+    };
+    // Comps generated up front come before the wait. A code-led round's comps
+    // wait for the flip --wait reports, but its sketches are written right
+    // after serving, before the wait; a single text card has neither.
+    let when = if scope == "direction" && single_card { t::WAIT_NOW } else if code_led { t::WAIT_AFTER_SKETCHES } else { t::WAIT_AFTER_COMPS };
+    let wait = fill(t::PRESENT_WAIT, &[("SQ", &sq), ("WHEN", when)]);
+    [t::PRESENTATION_HEADER, &present, comps, &wait, &build, t::PRESENT_FALLBACK].join("\n") + "\n"
 }
 
 struct ApiBudget {
@@ -81,7 +126,7 @@ fn api_base(env: &Env) -> String {
     base.strip_suffix('/').unwrap_or(&base).to_string()
 }
 
-fn card_base(env: &Env) -> String {
+pub(crate) fn card_base(env: &Env) -> String {
     env.get("IMPECCABLE_CARD_BASE").filter(|v| !v.is_empty()).cloned().unwrap_or_else(|| "https://impeccable.style/worlds/cards".to_string())
 }
 
@@ -208,10 +253,7 @@ fn render_challenger(env: &Env, concept: &Value, index: usize) -> String {
         .and_then(|s| s.as_array())
         .map(|a| a.iter().map(|r| fill(t::RENDER_CHALLENGER_RULE, &[("RULE", &value_str(r))])).collect())
         .unwrap_or_default();
-    let cb = card_base(env);
-    let id = vs(concept, "id");
-    let board = concept.get("cardBoard").filter(|v| crate::staleness::js_truthy(v)).map(value_str).unwrap_or_else(|| format!("{}/{}.webp", cb, id));
-    let hero = concept.get("cardHero").filter(|v| crate::staleness::js_truthy(v)).map(value_str).unwrap_or_else(|| format!("{}/{}-hero.webp", cb, id));
+    let (id, board, hero) = challenger_card(env, concept);
     fill(
         t::RENDER_CHALLENGER,
         &[
@@ -225,6 +267,16 @@ fn render_challenger(env: &Env, concept: &Value, index: usize) -> String {
             ("HERO", &hero),
         ],
     )
+}
+
+/// A dealt challenger's catalog id and its two card images: the QUALITY BAR
+/// line prints them and the roll record carries them, from this one place.
+fn challenger_card(env: &Env, concept: &Value) -> (String, String, String) {
+    let cb = card_base(env);
+    let id = vs(concept, "id");
+    let board = concept.get("cardBoard").filter(|v| crate::staleness::js_truthy(v)).map(value_str).unwrap_or_else(|| format!("{}/{}.webp", cb, id));
+    let hero = concept.get("cardHero").filter(|v| crate::staleness::js_truthy(v)).map(value_str).unwrap_or_else(|| format!("{}/{}-hero.webp", cb, id));
+    (id, board, hero)
 }
 
 fn value_str(v: &Value) -> String {
@@ -289,6 +341,8 @@ pub struct SeedArgs {
     pub grain: Option<Option<String>>,
     pub platform: Option<Option<String>>,
     pub candidate_count: f64,
+    /// The recorded build-path default and its file (`recorded_build_path`).
+    pub build_path: Option<(String, String)>,
 }
 
 fn unit(scope: &str, salt: &str, key: &str) -> f64 {
@@ -297,7 +351,19 @@ fn unit(scope: &str, salt: &str, key: &str) -> f64 {
 }
 
 /// JS: renderConceptSeed
-fn render_concept_seed(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArgs) -> Result<String, String> {
+/// Returns the text plus the catalog worlds the roll printed as challengers
+/// (`{"id", "board", "hero"}` each), for the roll record.
+fn render_concept_seed(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArgs) -> Result<(String, Vec<Value>), String> {
+    let (scope, reroll, roll, degraded, worlds) = render_roll(env, cwd, budget, a)?;
+    // PRESENTATION closes every roll, where a middle-truncated read still
+    // reaches it, like the restated lines above it.
+    let register = a.register.clone().flatten();
+    Ok((roll + &presentation_block(env, cwd, scope, reroll, degraded, register.as_deref(), a.mode.clone().flatten().as_deref(), a.build_path.as_ref()), worlds))
+}
+
+/// The roll itself: (scope, re-roll round, text, degraded, printed worlds).
+#[allow(clippy::type_complexity)]
+fn render_roll(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArgs) -> Result<(&'static str, usize, String, bool, Vec<Value>), String> {
     let scope = match a.scope.as_deref() {
         Some("surface") => "surface",
         Some("direction") => "direction",
@@ -438,7 +504,7 @@ fn render_concept_seed(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArg
             let mut pairs = common.clone();
             pairs.push(("DEGRADEDHEADER", &degraded_header));
             pairs.push(("AUTHORITYINSTRUCTION", &authority));
-            return Ok(fill(t::DEGRADED_SAFER, &pairs));
+            return Ok((scope, reroll, fill(t::DEGRADED_SAFER, &pairs), true, vec![]));
         }
         let degraded_register = if register == Some("bolder") { t::DEGRADED_BOLDER.to_string() } else { String::new() };
         let mut pairs = common.clone();
@@ -448,7 +514,7 @@ fn render_concept_seed(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArg
         pairs.push(("PROMOTEDINSTRUCTION", &promoted));
         pairs.push(("AUTHORITYINSTRUCTION", &authority));
         pairs.push(("RESTATED_ASSIGNED_OR_DEALT", &restated_assigned_or_dealt));
-        return Ok(fill(t::DEGRADED_BODY, &pairs));
+        return Ok((scope, reroll, fill(t::DEGRADED_BODY, &pairs), true, vec![]));
     };
 
     let compositions_enabled = env.get("IMPECCABLE_COMPOSITIONS").map(|v| v == "1").unwrap_or(false);
@@ -494,9 +560,16 @@ fn render_concept_seed(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArg
         _ => t::BOLDER_BLOCK.to_string(),
     };
     let round_challenger_instruction = if register == Some("bolder") { t::BOLDER_CHALLENGER.to_string() } else { challenger_instruction };
+    // The safer register spends its hand unseen, so it prints no challenger
+    // and records no world.
+    let mut worlds: Vec<Value> = Vec::new();
     let challenger_section = if register == Some("safer") {
         String::new()
     } else {
+        for c in &data.challengers {
+            let (id, board, hero) = challenger_card(env, c);
+            worlds.push(serde_json::json!({ "id": id, "board": board, "hero": hero }));
+        }
         let rendered: Vec<String> = data.challengers.iter().enumerate().map(|(i, c)| render_challenger(env, c, i)).collect();
         fill(
             t::CHALLENGER_SECTION,
@@ -523,7 +596,7 @@ fn render_concept_seed(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArg
     pairs.push(("RICHNESSINSTRUCTION", &richness));
     pairs.push(("TELEMETRYBLOCK", &telemetry_block));
     pairs.push(("RESTATED", &restated));
-    Ok(fill(t::MAIN, &pairs))
+    Ok((scope, reroll, fill(t::MAIN, &pairs), false, worlds))
 }
 
 fn random_hex8() -> String {
@@ -581,9 +654,15 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         grain: val("--grain"),
         platform: val("--platform"),
         candidate_count: num(val("--candidate-count")).unwrap_or(7.0),
+        build_path: crate::context_cli::recorded_build_path(&ctx, &cwd),
     };
     match render_concept_seed(&env, &cwd, &mut budget, &seed) {
-        Ok(text) => {
+        Ok((text, worlds)) => {
+            // A valid roll: the scope and re-roll round passed validation.
+            // serve-question reads the record to know a surface round when
+            // it serves one, and which catalog worlds were dealt, so it can
+            // name their card images when the comps are due (`record_roll`).
+            crate::serve_question::record_roll(&cwd, seed.scope.as_deref().unwrap_or("surface"), &seed.key, seed.reroll as usize, &worlds);
             io.out(&text);
             0
         }
@@ -634,6 +713,7 @@ mod tests {
             ("IMPECCABLE_API_TIMEOUT".into(), "300".into()),
             ("IMPECCABLE_NO_TELEMETRY".into(), "1".into()),
             ("IMPECCABLE_NO_STALENESS_CHECK".into(), "1".into()),
+            ("IMPECCABLE_SELF".into(), "impeccable".into()),
         ]);
         let (mut io, cap) = Io::captured("", proj.to_path_buf(), env);
         let argv: Vec<String> = args.iter().map(|s| s.to_string()).collect();
@@ -728,5 +808,200 @@ mod tests {
         assert!(out.contains("selected independently.\nMODE RULES (experience, from "), "block follows AUTHORITY: {out}");
         let (_, out) = seed(&proj, &skill, false, &["--scope", "direction", "--mode", "persuade", "--from", "k1", "--reroll", "1", "--register", "safer"]);
         assert!(out.contains("MODE RULES (persuade, from "), "{out}");
+    }
+
+    /// The PRESENTATION block: everything from its header to the end.
+    fn presentation(out: &str) -> &str {
+        let at = out.find("PRESENTATION (").unwrap_or_else(|| panic!("no PRESENTATION block: {out}"));
+        &out[at..]
+    }
+
+    const PRESENT_FIRST_LINE: &str = "- Present this hand on the decision page: write the options payload (`impeccable serve-question --schema` prints its shape), run `impeccable serve-question --start --payload <file>`, and open the URL it prints for the user.";
+
+    #[test]
+    fn direction_roll_ends_with_the_presentation_block() {
+        let (proj, skill) = fixture("present-direction", &[("mode-persuade", MODE_FILE)]);
+        let (code, out) = seed(&proj, &skill, true, &["--scope", "direction", "--mode", "persuade", "--from", "k1"]);
+        assert_eq!(code, 0, "{out}");
+        let block = presentation(&out);
+        assert!(out.contains("seed key k1.\nPRESENTATION (the decision round, condensed from new-work.md;"), "block follows the restated line: {out}");
+        let lines: Vec<&str> = block.trim_end().split('\n').collect();
+        assert_eq!(lines.len(), 6, "{block}");
+        assert_eq!(lines[1], PRESENT_FIRST_LINE);
+        assert!(lines[2].starts_with("- With image generation, every card declares a comp under .impeccable/mocks/decision/, canon included, declined challengers excepted. Serve first"), "{block}");
+        assert!(lines[2].contains("(a.png gets a.png.json)"), "{block}");
+        // The wait follows comp generation, never precedes it.
+        assert!(lines[3].starts_with("- After the last comp or sketch lands (at once when this round makes none), hold `impeccable serve-question --wait --key <key>`. If your shell hands back a session before --wait exits, keep polling that session until it exits; rerun --wait only after it exits 3"), "{block}");
+        assert!(lines[4].starts_with("- Build path: none recorded"), "{block}");
+        assert!(lines[4].contains("\"buildPath\": {\"value\": \"comp\", \"toggle\": true}"), "{block}");
+        assert!(lines[5].starts_with("- The structured question tool is the fallback, never the first channel: take it when --start exits 2, when --wait exits 4"), "{block}");
+        assert!(lines[5].contains("cannot hold a blocking --wait at all"), "{block}");
+        assert!(lines[5].contains("asks nothing about the build path"), "{block}");
+        assert!(!block.contains('\u{2014}'), "no em dashes: {block}");
+        assert!(out.ends_with('\n'));
+    }
+
+    #[test]
+    fn surface_roll_carries_wireframes_and_no_pick_or_canon() {
+        // Persuade: the comp-led surface wording. Operate and Read surface rounds are code-led
+        // (operate_and_read_surfaces_are_code_led_whatever_is_recorded).
+        let (proj, skill) = fixture("present-surface", &[("mode-persuade", MODE_FILE)]);
+        let (code, out) = seed(&proj, &skill, true, &["--scope", "surface", "--mode", "persuade", "--from", "k1"]);
+        assert_eq!(code, 0, "{out}");
+        let block = presentation(&out);
+        assert!(block.contains(PRESENT_FIRST_LINE), "{block}");
+        assert!(block.contains("- With image generation, each dealt card declares a comp under .impeccable/mocks/decision/; serve first"), "{block}");
+        assert!(block.contains("Without image generation, each card carries an HTML sketch: one self-contained file of the first viewport only"), "{block}");
+        assert!(!block.contains("canon included"), "{block}");
+    }
+
+    #[test]
+    fn rerolls_deliver_through_update_on_the_same_key() {
+        let (proj, skill) = fixture("present-reroll", &[("mode-persuade", MODE_FILE)]);
+        for args in [
+            &["--scope", "direction", "--mode", "persuade", "--from", "k1", "--reroll", "1"][..],
+            &["--scope", "direction", "--mode", "persuade", "--from", "k1", "--reroll", "2", "--register", "bolder"][..],
+            &["--scope", "direction", "--from", "k1", "--reroll", "1", "--register", "safer"][..],
+            &["--scope", "surface", "--mode", "persuade", "--from", "k1", "--reroll", "1"][..],
+        ] {
+            let (code, out) = seed(&proj, &skill, true, args);
+            assert_eq!(code, 0, "{out}");
+            let block = presentation(&out);
+            assert!(block.contains("- Re-roll round: while the page is open on a key, deliver this hand to it with `impeccable serve-question --update --key <same key> --payload <file>` and never --start a second server. A re-roll made before any page opened starts one with `impeccable serve-question --start --payload <file>`;"), "{args:?}: {block}");
+            assert!(!block.contains("- Present this hand"), "{args:?}: {block}");
+        }
+    }
+
+    #[test]
+    fn degraded_rolls_present_on_the_page_too() {
+        let (proj, skill) = fixture("present-degraded", &[("mode-persuade", MODE_FILE)]);
+        let (_, out) = seed(&proj, &skill, false, &["--scope", "direction", "--mode", "persuade", "--from", "k1"]);
+        assert!(out.contains("source: degraded"), "{out}");
+        let block = presentation(&out);
+        assert!(block.contains(PRESENT_FIRST_LINE), "{block}");
+        assert!(block.contains("- This degraded hand goes on the page as a single text-only card with re-roll; it declares no comp."), "{block}");
+        assert!(block.contains("- Right after serving, with no comp to generate first, hold `impeccable serve-question --wait --key <key>`."), "{block}");
+        // Degraded safer keeps its lineup: the full-hand comp line, not one card.
+        let (_, out) = seed(&proj, &skill, false, &["--scope", "direction", "--from", "k1", "--reroll", "1", "--register", "safer"]);
+        let block = presentation(&out);
+        assert!(block.contains("- Re-roll round:"), "{block}");
+        assert!(!block.contains("single text-only card"), "{block}");
+        assert!(block.contains("every card declares a comp"), "{block}");
+        let (_, out) = seed(&proj, &skill, false, &["--scope", "direction", "--from", "k1", "--reroll", "1", "--register", "bolder"]);
+        assert!(presentation(&out).contains("single text-only card"), "{out}");
+        let (_, out) = seed(&proj, &skill, false, &["--scope", "surface", "--mode", "persuade", "--from", "k1"]);
+        assert!(presentation(&out).contains("each dealt card declares a comp"), "{out}");
+    }
+
+    #[test]
+    fn operate_and_read_surfaces_are_code_led_whatever_is_recorded() {
+        let (proj, skill) = fixture("present-mode-code-led", &[("mode-operate", MODE_FILE), ("mode-read", MODE_FILE), ("mode-persuade", MODE_FILE)]);
+        let dir = proj.join(".impeccable");
+        std::fs::create_dir_all(&dir).unwrap();
+        let roll = |scope: &str, mode: &str| seed(&proj, &skill, true, &["--scope", scope, "--mode", mode, "--from", "k1"]).1;
+
+        // Nothing recorded: Operate and Read are code-led, Persuade and Experience keep the comp default.
+        for mode in ["operate", "read"] {
+            let out = roll("direction", mode);
+            let block = presentation(&out);
+            assert!(block.contains(&format!("- Build path: code-led. A surface in {mode} mode builds in code whatever the project records. With image generation, put \"buildPath\": {{\"value\": \"code\", \"toggle\": true}} in the payload")), "{block}");
+            assert!(block.contains("never offer to record a flip made on this surface"), "{block}");
+            assert!(block.contains("- Code-led round: every card but the declined challengers carries an HTML sketch"), "{block}");
+            assert!(block.contains("- After the last sketch lands, hold `impeccable serve-question --wait --key <key>`."), "{block}");
+            assert!(presentation(&roll("surface", mode)).contains("- Code-led round: each dealt card carries an HTML sketch"), "{mode}");
+        }
+        for mode in ["persuade", "experience"] {
+            assert!(presentation(&roll("direction", mode)).contains("- Build path: none recorded"), "{mode}");
+        }
+
+        // A recorded comp default still governs Persuade, and is named, not followed, on Operate and Read.
+        std::fs::write(dir.join("config.json"), r#"{"buildPath": "comp"}"#).unwrap();
+        let out = roll("direction", "operate");
+        let block = presentation(&out);
+        assert!(block.contains("- Build path: code-led. A surface in operate mode builds in code whatever the project records (the recorded default comp from .impeccable/config.json governs Persuade and Experience surfaces)."), "{block}");
+        assert!(block.contains("\"buildPath\": {\"value\": \"code\", \"toggle\": true}"), "{block}");
+        assert!(!block.contains("Serve first, then generate each comp in reading order"), "{block}");
+        assert!(presentation(&roll("direction", "persuade")).contains("- Build path: recorded default comp (from .impeccable/config.json)."));
+
+        // A recorded code default reads the same on Operate, with nothing extra to name.
+        std::fs::write(dir.join("config.json"), r#"{"buildPath": "code"}"#).unwrap();
+        assert!(presentation(&roll("direction", "read")).contains("A surface in read mode builds in code whatever the project records. With image generation"));
+    }
+
+    #[test]
+    fn build_path_line_names_the_recorded_default() {
+        let (proj, skill) = fixture("present-build-path", &[("mode-persuade", MODE_FILE)]);
+        let dir = proj.join(".impeccable");
+        std::fs::create_dir_all(&dir).unwrap();
+        let roll = |scope: &str| seed(&proj, &skill, true, &["--scope", scope, "--mode", "persuade", "--from", "k1"]).1;
+
+        std::fs::write(dir.join("config.json"), r#"{"buildPath": "code"}"#).unwrap();
+        let out = roll("direction");
+        let block = presentation(&out);
+        assert!(block.contains("- Build path: recorded default code (from .impeccable/config.json). With image generation, put \"buildPath\": {\"value\": \"code\", \"toggle\": true} in the payload; without it there is no toggle and the build is code-led. Never ask the user about the build path."), "{block}");
+        assert!(block.contains("- Code-led round: every card but the declined challengers carries an HTML sketch"), "{block}");
+        assert!(block.contains("only when --wait prints BUILD PATH FLIPPED"), "{block}");
+        assert!(block.contains("- After the last sketch lands, hold `impeccable serve-question --wait --key <key>`."), "{block}");
+        let out = roll("surface");
+        assert!(presentation(&out).contains("- Code-led round: each dealt card carries an HTML sketch"), "{out}");
+
+        // The machine-local file wins over the committed one.
+        std::fs::write(dir.join("config.local.json"), r#"{"buildPath": "comp"}"#).unwrap();
+        let out = roll("direction");
+        let block = presentation(&out);
+        assert!(block.contains("- Build path: recorded default comp (from .impeccable/config.local.json)."), "{block}");
+        assert!(block.contains("\"buildPath\": {\"value\": \"comp\", \"toggle\": true}"), "{block}");
+        assert!(block.contains("Serve first, then generate each comp in reading order"), "{block}");
+
+        // Only exact comp / code count; anything else reads as unrecorded.
+        std::fs::remove_file(dir.join("config.local.json")).unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"buildPath": "comp-first"}"#).unwrap();
+        let out = roll("direction");
+        assert!(presentation(&out).contains("- Build path: none recorded"), "{out}");
+    }
+
+    #[test]
+    fn telemetry_pings_print_no_presentation() {
+        let (proj, skill) = fixture("present-ping", &[]);
+        let (_, out) = seed(&proj, &skill, true, &["--kind", "assigned", "--from", "k1", "--scope", "direction"]);
+        assert!(!out.contains("PRESENTATION"), "{out}");
+    }
+
+    #[test]
+    fn every_roll_records_its_scope_for_serve_question() {
+        let (proj, skill) = fixture("roll-record", &[]);
+        let record = proj.join(".impeccable/questions/roll.json");
+        let read = || serde_json::from_str::<Value>(&std::fs::read_to_string(&record).unwrap()).unwrap();
+        // Invalid arguments and telemetry pings are not rolls.
+        let (code, _) = seed(&proj, &skill, true, &["--scope", "world", "--from", "k1"]);
+        assert_eq!(code, 1);
+        seed(&proj, &skill, true, &["--chosen", "x", "--kind", "assigned", "--from", "k1", "--scope", "surface"]);
+        assert!(!record.exists());
+        // A surface roll, then a direction re-roll replacing it.
+        let (code, _) = seed(&proj, &skill, true, &["--scope", "surface", "--mode", "operate", "--from", "k1"]);
+        assert_eq!(code, 0);
+        let r = read();
+        assert_eq!((r["scope"].as_str(), r["key"].as_str(), r["reroll"].as_u64()), (Some("surface"), Some("k1"), Some(0)));
+        // The record names every challenger the roll printed, with the same
+        // board and hero URLs as its QUALITY BAR line.
+        let (_, out) = seed(&proj, &skill, true, &["--scope", "surface", "--mode", "operate", "--from", "k1"]);
+        let worlds = read()["worlds"].as_array().cloned().unwrap();
+        assert_eq!(worlds.len(), out.matches("     SOURCE ID: ").count().min(out.matches("     QUALITY BAR: ").count()));
+        assert!(!worlds.is_empty());
+        for w in &worlds {
+            let (id, board, hero) = (w["id"].as_str().unwrap(), w["board"].as_str().unwrap(), w["hero"].as_str().unwrap());
+            assert!(out.contains(&format!("     SOURCE ID: {id}\n")), "{id}: {out}");
+            assert!(out.contains(&format!("     QUALITY BAR: board {board} · hero {hero}")), "{id}: {out}");
+        }
+        // The safer register prints no challenger, so it records no world.
+        seed(&proj, &skill, true, &["--scope", "direction", "--from", "k1", "--reroll", "1", "--register", "safer"]);
+        assert!(read().get("worlds").is_none(), "{}", read());
+        assert!(r["at"].as_f64().is_some_and(|at| (crate::util::now_ms() - at).abs() < 60_000.0), "{r}");
+        let (code, _) = seed(&proj, &skill, false, &["--scope", "direction", "--from", "k2", "--reroll", "1"]);
+        assert_eq!(code, 0);
+        let r = read();
+        assert_eq!((r["scope"].as_str(), r["key"].as_str(), r["reroll"].as_u64()), (Some("direction"), Some("k2"), Some(1)));
+        // A degraded roll dealt no world: the record keeps its old shape.
+        assert!(r.get("worlds").is_none(), "{r}");
     }
 }
