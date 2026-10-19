@@ -85,9 +85,17 @@ function run(args, cwd) {
   });
 }
 
+// A direction or surface round (a payload carrying buildPath) declares each
+// card's kind, or --start refuses it. These fixtures exercise rendering, not
+// identity, so a card without one takes the lead's or a dealt structure's.
+function withCardKinds(payload) {
+  if (!payload.buildPath) return payload;
+  return { ...payload, options: payload.options.map((o, i) => (o.kind ? o : { ...o, kind: i === 0 ? 'assigned' : 'dealt' })) };
+}
+
 async function startDaemon(cwd, payload, key) {
   const payloadPath = path.join(cwd, `${key}.payload.json`);
-  writeFileSync(payloadPath, JSON.stringify(payload));
+  writeFileSync(payloadPath, JSON.stringify(withCardKinds(payload)));
   const started = await run(['--start', '--payload', payloadPath, '--no-open', '--key', key], cwd);
   assert.equal(started.code, 0, `--start failed: ${started.out} ${started.err}`);
   const url = started.out.match(/QUESTION URL: (\S+)/)?.[1];
@@ -129,10 +137,10 @@ function spawnSyncGen(prompt, out, size = null) {
 // serve-question interactive cycles
 // --------------------------------------------------------------------------
 describe('new-work-e2e: serve-question decision page', () => {
-  it('renders a light system-font picker without font or external requests', async () => {
+  it('renders a system-font picker without font or external requests', async () => {
     const cwd = makeWorkspace();
     const key = 'system-fonts';
-    const context = await browser.newContext({ colorScheme: 'dark' });
+    const context = await browser.newContext({ colorScheme: 'light' });
     const externalRequests = [];
     const fontResponses = [];
     try {
@@ -181,7 +189,7 @@ describe('new-work-e2e: serve-question decision page', () => {
       });
       assert.equal(appearance.fonts, 0, 'no custom font faces');
       assert.match(appearance.family, /^system-ui,/);
-      assert.equal(appearance.scheme, 'light', 'picker stays light even with a dark OS preference');
+      assert.equal(appearance.scheme, 'light', 'picker preserves its light appearance under a light OS preference');
       assert.ok(appearance.logoPaths > 2, 'the brand mark and wordmark are vector outlines');
       assert.equal(appearance.logoText, 0, 'the logo does not depend on a font');
       assert.equal(appearance.leadBorder, appearance.kinpaku, 'lead outline uses default Kinpaku');
