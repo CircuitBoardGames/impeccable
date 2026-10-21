@@ -9,6 +9,8 @@ jobs:
   skill-pack:
     name: skill-pack (vendored surface)
     runs-on: ubuntu-latest
+    # A draft never runs this: it runs once un-drafted.
+    if: ${{ !github.event.pull_request.draft }}
     steps:
       - uses: actions/checkout@v4
       - name: Agents and skills parse, and no agent needs a plugin install
