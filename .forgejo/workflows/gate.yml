@@ -14,3 +14,63 @@ jobs:
       - uses: actions/checkout@v4
       - name: Agents and skills parse, and no agent needs a plugin install
         run: python3 .forgejo/gate.py
+
+  # Strict clippy over the Rust workspace (CircuitBoardGames/ClaudeCode#2195). Upstream's CI runs no
+  # clippy, so the command is the house default. Clippy's lint set moves with each release, so the
+  # job pins 1.98.1 instead of floating on rust-toolchain.toml's `stable`; it installs that file's
+  # wasm32 target too, so the pinned toolchain is the file's toolchain, frozen at one release.
+  # Host-mode runner with a shared HOME: the install is serialised and skipped when already present
+  # (the Forge-Tools rust template's pattern).
+  clippy:
+    name: clippy (strict, Rust 1.98.1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # A draft waits off the runner: the queue un-drafts it at the front, and that edit runs this.
+    # A machine-held or red draft is not waiting but being fixed (the hold or the red drafts it), so its pushes run here.
+    if: ${{ !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'queue:not-admitted') || contains(github.event.pull_request.labels.*.name, 'queue:machine-hold') || contains(github.event.pull_request.labels.*.name, 'queue:red') }}
+    steps:
+      - name: Admission — a held PR must report not-passing, never green
+        if: ${{ contains(github.event.pull_request.labels.*.name, 'queue:not-admitted') }}
+        run: |
+          echo "held: queue:not-admitted is attached, so this gate is suppressed and must not pass"
+          exit 1
+      - uses: actions/checkout@v4
+      - name: Toolchain 1.98.1 with clippy (serialised)
+        run: |
+          mkdir -p "$HOME/.rustup"
+          flock "$HOME/.rustup/.ci-install.lock" sh -c '
+            if [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            fi
+            R="$HOME/.cargo/bin/rustup"
+            { "$R" run 1.98.1 cargo clippy --version \
+                && "$R" target list --installed --toolchain 1.98.1 | grep -qx wasm32-unknown-unknown; } >/dev/null 2>&1 \
+              || "$R" toolchain install 1.98.1 --profile minimal --component clippy --target wasm32-unknown-unknown
+          '
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      # sccache: a compile cache keyed on each crate's source content, shared by every Rust gate on
+      # this runner. Not a shared target/ (a stale-code false green, 2026-09-15): each job keeps its own target/ and its own server,
+      # and an entry is only reused when the inputs hash the same. SCCACHE_BASEDIRS strips this job's
+      # random workspace path so dependencies hit across jobs; workspace crates still hash their
+      # absolute paths, so the PR's own code always rebuilds (proved 2026-10-21: a fault in a cached
+      # crate still failed). 4G cap: the runner's disk is near full.
+      - name: sccache (serialised install)
+        run: |
+          S="$HOME/.cache/sccache-0.18.0"; mkdir -p "$HOME/.rustup" "$S"
+          flock "$HOME/.rustup/.ci-install.lock" sh -euc '
+            [ -x "$0/sccache" ] && exit 0
+            curl -fsSL -o "$0.tgz" https://github.com/mozilla/sccache/releases/download/v0.18.0/sccache-v0.18.0-x86_64-unknown-linux-musl.tar.gz
+            printf "%s  %s\n" 45f1447fbe231e3037bde351ef70677dd212216c8d62ae7ca409fecc4d6acc89 "$0.tgz" | sha256sum -c --quiet
+            tar xzf "$0.tgz" -C "$0" --strip-components=1 sccache-v0.18.0-x86_64-unknown-linux-musl/sccache
+            rm "$0.tgz"
+          ' "$S"
+          { echo "RUSTC_WRAPPER=$S/sccache"; echo "SCCACHE_DIR=$HOME/.cache/sccache"; echo "SCCACHE_CACHE_SIZE=4G"
+            echo "SCCACHE_BASEDIRS=$GITHUB_WORKSPACE"; echo "SCCACHE_SERVER_UDS=$(mktemp -u /tmp/sccache-XXXXXXXX.sock)"
+            echo "CARGO_INCREMENTAL=0"; } >> "$GITHUB_ENV"
+      - name: cargo clippy
+        run: cargo +1.98.1 clippy --workspace --all-targets --locked -- -D warnings
+      # The hit rate goes in the log, and the job's server does not outlive it. Never fails: a cancelled
+      # job's server is already dead, and a failing stop turned that cancellation into a red (cmux job 36085).
+      - name: sccache stats, stop
+        if: always()
+        run: '[ -z "${RUSTC_WRAPPER:-}" ] || { "$RUSTC_WRAPPER" --show-stats; "$RUSTC_WRAPPER" --stop-server; } || true'
