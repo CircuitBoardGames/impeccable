@@ -4,6 +4,9 @@
 //! bilinear up), composite, fills, rectangles, and a 5x7 bitmap-font label.
 //! An image is `{ width, height, data }` with RGBA8 data.
 
+// Index loops mirror the JS port and walk several parallel buffers by the same index.
+#![allow(clippy::needless_range_loop)]
+
 use crate::jsnum::{round, u8w};
 
 /// RGBA8 raster. `data.len() == width * height * 4`.
@@ -244,6 +247,8 @@ pub struct LabelSize {
 }
 
 /// JS: drawLabel(img, text, x, y, {fg, bg, scale, pad}).
+// Mirrors JS drawLabel(img, text, x, y, {fg, bg, scale, pad}) argument for argument.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_label(
     img: &mut Image,
     text: &str,

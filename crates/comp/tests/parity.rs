@@ -172,7 +172,7 @@ fn cmp_fp(fp: Option<&ff::Fingerprint>, gold: &Value, what: &str) {
         assert!(fp.is_none(), "{what}: expected null fingerprint");
         return;
     }
-    let fp = fp.expect(&format!("{what}: expected some fingerprint"));
+    let fp = fp.unwrap_or_else(|| panic!("{what}: expected some fingerprint"));
     assert_eq!(fp.lines as u64, gold["lines"].as_u64().unwrap(), "{what}.lines");
     assert_eq!(fp.glyphs, gold["glyphs"].as_i64().unwrap(), "{what}.glyphs");
     approx(fp.cap_height_px, &gold["capHeightPx"], 1e-9, &format!("{what}.capHeightPx"));
@@ -385,7 +385,7 @@ fn hero_checks_parity() {
     assert_json_eq(&cs["build"], &gh["chromeStrip"]["build"], "chromeStrip.build");
 
     // ruleRows
-    let rr: Vec<Value> = hero::rule_rows(&strip_comp, 0.5, 28.0).into_iter().map(|v| Value::from(v)).collect();
+    let rr: Vec<Value> = hero::rule_rows(&strip_comp, 0.5, 28.0).into_iter().map(Value::from).collect();
     assert_json_eq(&Value::Array(rr), &gh["ruleRows"]["strip"], "ruleRows");
 
     // inkColor of comp crop

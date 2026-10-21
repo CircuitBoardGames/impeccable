@@ -76,7 +76,7 @@ fn truthy(v: Option<&Value>) -> bool {
     match v {
         None | Some(Value::Null) => false,
         Some(Value::Bool(b)) => *b,
-        Some(Value::Number(n)) => n.as_f64().map_or(false, num_truthy),
+        Some(Value::Number(n)) => n.as_f64().is_some_and(num_truthy),
         Some(Value::String(s)) => !s.is_empty(),
         Some(_) => true,
     }
@@ -206,7 +206,7 @@ pub fn collect_visual_contrast_reasons(dom: &dyn Dom, el: ElId) -> Vec<String> {
 /// JS: index.mjs#collectVisualContrastCandidates(options)
 pub fn collect_visual_contrast_candidates(dom: &dyn Dom, options: &Value) -> Vec<Value> {
     let max_candidates = match options.get("maxCandidates") {
-        Some(Value::Number(n)) if n.as_f64().map_or(false, f64::is_finite) => {
+        Some(Value::Number(n)) if n.as_f64().is_some_and(f64::is_finite) => {
             n.as_f64().unwrap()
         }
         _ => 12.0,
@@ -242,7 +242,7 @@ pub fn collect_visual_contrast_candidates(dom: &dyn Dom, options: &Value) -> Vec
         }
         let bg_color = super::background::read_own_background_color(dom, el);
         let is_styled_button = (tag == "a" || tag == "button")
-            && bg_color.map_or(false, |c| c.a.map_or(false, |a| a > 0.5));
+            && bg_color.is_some_and(|c| c.a.is_some_and(|a| a > 0.5));
         if SAFE_TAGS.contains(&tag.as_str()) && !is_styled_button {
             continue;
         }
@@ -286,7 +286,7 @@ pub fn collect_visual_contrast_candidates(dom: &dyn Dom, options: &Value) -> Vec
             "height": math_max(1.0, (rect.height + 4.0).ceil()),
         });
         let prefer_rendered = text_color.is_none()
-            || text_color.map_or(false, |c| c.a.unwrap_or(f64::NAN) < 0.99)
+            || text_color.is_some_and(|c| c.a.unwrap_or(f64::NAN) < 0.99)
             || reasons.iter().any(|r| {
                 matches!(
                     r.as_str(),
@@ -821,6 +821,8 @@ pub fn css_url_no_image() -> Value {
 
 /// JS: sampleCssBackground url path — painted rect of the loaded image over
 /// the node's box and the source point; `Err` is the unresolved sample.
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 pub fn css_url_source_point(
     dom: &dyn Dom,
     node: ElId,
@@ -851,7 +853,7 @@ pub fn sample_is_opaque(sample: &Value) -> bool {
     }
     match color.get("a") {
         None | Some(Value::Null) => true,
-        Some(Value::Number(n)) => n.as_f64().map_or(false, |a| a >= 0.95),
+        Some(Value::Number(n)) => n.as_f64().is_some_and(|a| a >= 0.95),
         // JS `>=` on a non-number coerces; a non-numeric alpha never occurs.
         Some(_) => false,
     }

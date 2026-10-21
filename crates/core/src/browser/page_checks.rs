@@ -402,7 +402,7 @@ pub fn check_heading_rhythm_dom(dom: &dyn Dom) -> Vec<ElFinding> {
                 sib = dom.previous_element_sibling(s);
             }
             let parent = dom.parent(n);
-            let Some(p) = parent else { return None };
+            let p = parent?;
             if Some(p) == body {
                 return None;
             }
@@ -519,7 +519,7 @@ pub fn check_cream_palette(dom: &dyn Dom) -> Vec<RuleHit> {
     let html = dom.document_element();
 
     let mut bg = super::background::read_own_background_color(dom, body);
-    if bg.is_none() || bg.map_or(false, |c| c.a == Some(0.0)) {
+    if bg.is_none() || bg.is_some_and(|c| c.a == Some(0.0)) {
         if let Some(h) = html {
             bg = super::background::read_own_background_color(dom, h);
         }
@@ -716,7 +716,7 @@ pub fn check_edge_flush_cards_dom(dom: &dyn Dom) -> Vec<ElFinding> {
                 continue;
             }
             let bg = parse_any_color(Some(&dom.style(card, "backgroundColor")));
-            let has_bg = bg.map_or(false, |c| c.alpha_or_one() > 0.5);
+            let has_bg = bg.is_some_and(|c| c.alpha_or_one() > 0.5);
             let border_sides = ["Top", "Right", "Bottom", "Left"]
                 .iter()
                 .filter(|s| style_px(dom, card, &format!("border{s}Width")) > 0.0)

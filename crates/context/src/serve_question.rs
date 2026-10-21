@@ -441,6 +441,8 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
         std::thread::spawn(move || loop {
             sleep_ms(2000);
             let st = state.lock().unwrap();
+            // The `is_some()` check sits in a compound condition; an if-let would split the chain.
+            #[allow(clippy::unnecessary_unwrap)]
             if st.last_beat_seen.is_none() {
                 if timeout_sec > 0.0 && now_ms() - started_at > timeout_sec * 1000.0 {
                     println!("serve-question: timed out with no answer");
@@ -1106,6 +1108,8 @@ impl ServerState {
             let cols = if cols_n > 0.0 { cols_n } else { 12.0 };
             let rows_n = num_of(frame.get("rows"));
             let rows = if rows_n > 0.0 { rows_n } else { 10.0 };
+            // `min(100).max(0)` maps NaN (0/0) to 0; `clamp` would keep NaN.
+            #[allow(clippy::manual_clamp)]
             let pct = |n: f64, total: f64| -> String { format!("{}%", crate::util::to_fixed(((n / total) * 100.0).min(100.0).max(0.0), 2)) };
             let cells: String = regions
                 .iter()

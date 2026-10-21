@@ -465,7 +465,7 @@ pub fn run(argv: &[String], io: &mut Io, renderer: &mut dyn FontRenderer) -> i32
     let Some(fp) = fp else {
         // No lettering: record the attempt and size by the box.
         if let Some(reg) = region_mut(spec_val, id) {
-            let ty = reg.as_object_mut().and_then(|_| None::<()>);
+            let ty = reg.as_object_mut().and(None::<()>);
             let _ = ty;
             let mut tmap = reg.get("type").and_then(|t| t.as_object()).cloned().unwrap_or_default();
             tmap.insert("comp".into(), Value::Null);

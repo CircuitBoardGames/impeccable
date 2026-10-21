@@ -966,7 +966,7 @@ pub fn decode_uri_component(s: &str) -> String {
 
 re!(
     ANIMATE_BOUNCE_RE,
-    format!("(?-u:\\b)(?i:animate-bounce)(?-u:\\b)")
+    "(?-u:\\b)(?i:animate-bounce)(?-u:\\b)"
 );
 re!(BEZIER_RE, r"(?i:cubic-bezier)\([^)]+\)");
 re!(

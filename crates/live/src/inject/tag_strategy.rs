@@ -137,9 +137,7 @@ pub fn remove_tag(content: &str) -> String {
                 .replacen(&content, 1, |caps: &regex::Captures| {
                     let indent = caps.get(1).map(|m| m.as_str()).unwrap_or("");
                     let trailing = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-                    if trailing.contains('\r') || trailing.contains('\n') {
-                        indent.to_string()
-                    } else if !indent.is_empty() {
+                    if trailing.contains('\r') || trailing.contains('\n') || !indent.is_empty() {
                         indent.to_string()
                     } else {
                         trailing.to_string()
@@ -251,7 +249,7 @@ fn append_origin_to_directive(csp: &str, directive: &str, origin: &str) -> Strin
         .unwrap();
     if let Some(m) = re.captures(csp) {
         let tokens_str = m.get(4).map(|t| t.as_str()).unwrap_or("");
-        let tokens: Vec<&str> = tokens_str.trim().split_whitespace().collect();
+        let tokens: Vec<&str> = tokens_str.split_whitespace().collect();
         // JS: `m[4].trim().split(/\s+/)`; an empty trimmed string yields ['']
         let tokens: Vec<&str> = if tokens_str.trim().is_empty() {
             vec![""]

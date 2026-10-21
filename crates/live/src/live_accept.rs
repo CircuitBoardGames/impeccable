@@ -551,9 +551,7 @@ fn original_block_has_exact_manual_text(block: &str, text: &str) -> bool {
     if needle.is_empty() {
         return false;
     }
-    manual_edit_text_segments(block)
-        .iter()
-        .any(|s| *s == needle)
+    manual_edit_text_segments(block).contains(&needle)
 }
 
 fn manual_edit_op_appears_in_block(op: &Value, block: &str) -> bool {
@@ -671,6 +669,8 @@ fn handle_discard_unlocked(id: &str, lines: &[String], target_file: &str) -> Res
 }
 
 /// JS: buildCarbonizeReplacement({...})
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 fn build_carbonize_replacement(
     indent: &str,
     cs: (&str, &str),
@@ -1309,7 +1309,7 @@ mod discard_tests {
 #[cfg(test)]
 mod bake_tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     const SESSION: &str = "ab12cd34";
 
@@ -1357,9 +1357,9 @@ mod bake_tests {
         dir
     }
 
-    fn accept(dir: &PathBuf, args: &[&str]) -> Value {
+    fn accept(dir: &Path, args: &[&str]) -> Value {
         let env: Env = std::env::vars().collect();
-        let (mut io, captured) = Io::captured("", dir.clone(), env);
+        let (mut io, captured) = Io::captured("", dir.to_path_buf(), env);
         let argv: Vec<String> = args.iter().map(|a| a.to_string()).collect();
         let code = run(&argv, &mut io);
         drop(io);

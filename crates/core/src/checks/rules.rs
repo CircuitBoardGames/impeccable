@@ -32,6 +32,8 @@ macro_rules! re {
 const SIDE_NAMES: [&str; 4] = ["Top", "Right", "Bottom", "Left"];
 
 /// JS: checks.mjs#checkBorders
+// `i` indexes SIDE_NAMES and the widths/colors sides together.
+#[allow(clippy::needless_range_loop)]
 pub fn check_borders(
     tag: &str,
     widths: &Sides<f64>,
@@ -82,7 +84,7 @@ pub fn check_borders(
                 "border-accent-on-rounded",
                 format!("border-{sn}: {w_s}px + border-radius: {r_s}px"),
             ));
-        } else if !opts.tab_context && w >= 3.0 && w <= 12.0 {
+        } else if !opts.tab_context && (3.0..=12.0).contains(&w) {
             findings.push(RuleHit::new("side-tab", format!("border-{sn}: {w_s}px")));
         }
     }
@@ -137,6 +139,8 @@ fn is_heading_123(tag: &str) -> bool {
 }
 
 /// JS: checks.mjs#checkColors
+// The `is_some()` check sits in a compound condition; an if-let would split the chain.
+#[allow(clippy::unnecessary_unwrap)]
 pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
     let tag = opts.tag.as_str();
     let bg_image = opts.bg_image.as_deref().unwrap_or("");
@@ -144,7 +148,7 @@ pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
     if set_has(SAFE_TAGS, tag) {
         let own_bg = opts
             .bg_color
-            .map_or(false, |c| c.a.map_or(false, |a| a > 0.5));
+            .is_some_and(|c| c.a.is_some_and(|a| a > 0.5));
         let own_gradient = !bg_image.is_empty() && GRADIENT_CI.is_match(bg_image);
         let is_styled_control =
             opts.has_direct_text && (own_bg || own_gradient) && opts.font_size >= 9.0;
@@ -164,7 +168,7 @@ pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
 
         if has_chroma(Some(&text_color), Some(50.0)) {
             let hue = get_hue(Some(&text_color));
-            if hue >= 260.0 && hue <= 310.0 && (is_heading_123(tag) || opts.font_size >= 20.0) {
+            if (260.0..=310.0).contains(&hue) && (is_heading_123(tag) || opts.font_size >= 20.0) {
                 findings.push(RuleHit::new(
                     "ai-color-palette",
                     format!(
@@ -267,7 +271,7 @@ fn contrast_findings(opts: &ColorOpts, text_color: &Rgba) -> Vec<RuleHit> {
     if ratio < threshold {
         let is_alpha_fallback_fp = !opts.detector_is_browser
             && opts.effective_bg.is_none()
-            && text_color.a.map_or(false, |a| a < 1.0);
+            && text_color.a.is_some_and(|a| a < 1.0);
         if !is_alpha_fallback_fp {
             let ratio_label = if to_fixed(ratio, 1) == to_fixed(threshold, 1) {
                 to_fixed(ratio, 2)
@@ -302,7 +306,7 @@ pub fn check_placeholder_colors(
     mut text_color: Rgba,
 ) -> Vec<RuleHit> {
     let mut flat: Option<ColorOpts> = None;
-    if text_color.a.map_or(false, |a| a < 1.0) {
+    if text_color.a.is_some_and(|a| a < 1.0) {
         if let Some(bg) = opts.effective_bg {
             text_color = composite_color_over(&text_color, &bg);
         } else if let Some(stops) = opts.effective_bg_stops.as_ref().filter(|s| !s.is_empty()) {
@@ -339,7 +343,7 @@ pub fn check_hover_contrast(opts: &HoverContrastOpts) -> Vec<RuleHit> {
     {
         return Vec::new();
     }
-    if set_has(SAFE_TAGS, &opts.tag) && !opts.own_bg_alpha.map_or(false, |a| a > 0.5) {
+    if set_has(SAFE_TAGS, &opts.tag) && !opts.own_bg_alpha.is_some_and(|a| a > 0.5) {
         return Vec::new();
     }
     let text_color = opts.text_color.unwrap();
@@ -392,10 +396,10 @@ pub fn check_icon_tile(opts: &IconTileOpts) -> Vec<RuleHit> {
     }
     let w = opts.sibling_width;
     let h = opts.sibling_height;
-    if !(w >= 32.0 && w <= 128.0) {
+    if !(32.0..=128.0).contains(&w) {
         return Vec::new();
     }
-    if !(h >= 32.0 && h <= 128.0) {
+    if !(32.0..=128.0).contains(&h) {
         return Vec::new();
     }
     let ratio = w / h;
@@ -404,11 +408,11 @@ pub fn check_icon_tile(opts: &IconTileOpts) -> Vec<RuleHit> {
     }
     let bg_visible = opts
         .sibling_bg_color
-        .map_or(false, |c| c.a.map_or(false, |a| a > 0.1))
+        .is_some_and(|c| c.a.is_some_and(|a| a > 0.1))
         || opts
             .sibling_bg_image
             .as_deref()
-            .map_or(false, |s| !s.is_empty() && s != "none");
+            .is_some_and(|s| !s.is_empty() && s != "none");
     let border_visible = opts.sibling_border_width > 0.0;
     if !bg_visible && !border_visible {
         return Vec::new();
@@ -631,6 +635,8 @@ pub fn resolve_hero_heading_size_px(value: Option<&str>) -> f64 {
 }
 
 /// JS: checks.mjs#checkHeroEyebrow
+// `!(a >= b)` is deliberately true for NaN (JS comparison semantics); `<` would flip it.
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 pub fn check_hero_eyebrow(opts: &HeroEyebrowOpts) -> Vec<RuleHit> {
     if opts.heading_tag != "h1" {
         return Vec::new();
@@ -650,7 +656,7 @@ pub fn check_hero_eyebrow(opts: &HeroEyebrowOpts) -> Vec<RuleHit> {
     }
     let text = js::trim(opts.sibling_text.as_deref().unwrap_or(""));
     let text_len = utf16_length(text);
-    if text_len < 2 || text_len > 60 {
+    if !(2..=60).contains(&text_len) {
         return Vec::new();
     }
     if !(opts.sibling_font_size > 0.0 && opts.sibling_font_size <= 14.0) {
@@ -852,7 +858,7 @@ fn glow_scan(value: Option<&str>, prop: &str, on_dark_bg: bool) -> Option<RuleHi
 pub fn check_glow(opts: &GlowOpts) -> Vec<RuleHit> {
     let on_dark_bg = opts
         .effective_bg
-        .map_or(false, |bg| relative_luminance(&bg) < 0.1);
+        .is_some_and(|bg| relative_luminance(&bg) < 0.1);
     let found = glow_scan(opts.box_shadow.as_deref(), "box-shadow", on_dark_bg)
         .or_else(|| glow_scan(opts.text_shadow.as_deref(), "text-shadow", on_dark_bg));
     match found {

@@ -198,7 +198,7 @@ fn png_fake_background(prompt: &str, w: usize, h: usize, transparent: bool) -> V
     for y in 0..h {
         let row = y * (stride + 1);
         raw[row] = 0;
-        let idx = (colors.len() - 1).min(if band_h == 0 { 0 } else { y / band_h });
+        let idx = (colors.len() - 1).min(y.checked_div(band_h).unwrap_or(0));
         let [r, g, b] = colors[idx];
         for x in 0..w {
             let p = row + 1 + x * channels;

@@ -63,6 +63,8 @@ fn form_encode(s: &str) -> String {
     out
 }
 
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 fn fetch_roll(env: &Env, budget: &mut ApiBudget, scope: &str, key: &str, mode: Option<&str>, grain: Option<&str>, platform: Option<&str>, reroll: usize) -> Option<Value> {
     let mut params = vec![("scope", scope.to_string()), ("key", key.to_string()), ("reroll", reroll.to_string())];
     if let Some(m) = mode {
@@ -98,6 +100,8 @@ fn telemetry_disabled(env: &Env) -> bool {
 }
 
 /// JS: pingChosen
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 fn ping_chosen(env: &Env, budget: &mut ApiBudget, chosen_id: Option<&str>, key: Option<&str>, scope: Option<&str>, mode: Option<&str>, kind: Option<&str>, register: Option<&str>) -> bool {
     if telemetry_disabled(env) {
         return false;

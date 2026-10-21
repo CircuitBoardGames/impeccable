@@ -154,6 +154,8 @@ pub fn ssim_shifted(a: &Gray, b: &Gray, dx: i64, dy: i64, win: usize) -> f64 {
 }
 
 /// JS: structureScore(imgA, imgB, workWidth=256).
+// `max(0).min(1)` maps NaN to 0; `clamp` would keep NaN.
+#[allow(clippy::manual_clamp)]
 pub fn structure_score(img_a: &Image, img_b: &Image, work_width: usize) -> f64 {
     let ww = work_width as f64;
     let h = 8f64.max(round((img_a.height as f64 / img_a.width as f64) * ww));

@@ -74,6 +74,8 @@ pub fn round_fixed(v: f64, digits: usize) -> f64 {
 }
 
 /// JS `'#' + rgb.map(v => clamp(round(v)).toString(16).padStart(2,'0'))`.
+// `max(0).min(255)` maps NaN to 0; `clamp` would keep NaN and change the hex.
+#[allow(clippy::manual_clamp)]
 pub fn to_hex(rgb: [f64; 3]) -> String {
     let mut s = String::from("#");
     for v in rgb {

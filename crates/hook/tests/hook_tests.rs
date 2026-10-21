@@ -812,14 +812,14 @@ fn cache_round_trip_and_gc() {
     assert_eq!(bump_edit_count(&mut cache, "s", "/x/a.tsx"), 1.0);
     assert_eq!(bump_edit_count(&mut cache, "s", "/x/a.tsx"), 2.0);
     let g = f("gradient-text", 3.0, "G", "d", "s");
-    remember_findings(&mut cache, "s", "/x/a.tsx", &[g.clone()]);
+    remember_findings(&mut cache, "s", "/x/a.tsx", std::slice::from_ref(&g));
     assert!(persist_cache(&r, &cwd, &cache));
     let back = read_cache(&cwd);
     let entry = &back["sessions"]["s"]["files"]["/x/a.tsx"];
     assert_eq!(entry["editCount"], json!(2));
     assert_eq!(entry["findings"], json!(["gradient-text:3"]));
     let mut cache2 = back.clone();
-    assert!(dedupe_against_cache(&[g.clone()], &mut cache2, "s", "/x/a.tsx").is_empty());
+    assert!(dedupe_against_cache(std::slice::from_ref(&g), &mut cache2, "s", "/x/a.tsx").is_empty());
     // same-line value-specific findings stay distinct
     let mut a = f("overused-font", 1.0, "O", "d", "font-family: Inter");
     a.extras.insert("ignoreValue".into(), json!("Inter"));
@@ -932,8 +932,10 @@ fn filter_findings_rules_advisory_and_values() {
     assert!(per_edit_tiering_active(&HookConfig::default(), "claude"));
     assert!(!per_edit_tiering_active(&HookConfig::default(), "cursor"));
     assert!(!per_edit_tiering_active(&HookConfig::default(), "github"));
-    let mut all = HookConfig::default();
-    all.per_edit_rules = "all".into();
+    let all = HookConfig {
+        per_edit_rules: "all".into(),
+        ..Default::default()
+    };
     assert!(!per_edit_tiering_active(&all, "claude"));
 }
 
@@ -1224,7 +1226,7 @@ fn expand_scan_targets_follows_styles() {
     t.write("src/index.sass", "a{}");
     t.write("src/theme.scss", "a{}");
     t.write("src/App.module.less", "a{}");
-    let out = expand_scan_targets(&r, &[app.clone()], &cwd);
+    let out = expand_scan_targets(&r, std::slice::from_ref(&app), &cwd);
     assert_eq!(out[0], app);
     for name in [
         "src/theme.scss",
@@ -1246,7 +1248,7 @@ fn expand_scan_targets_follows_styles() {
         "traversal-looking primaries are not expanded"
     );
     let css = t.write("src/main.css", "a{}");
-    assert_eq!(expand_scan_targets(&r, &[css.clone()], &cwd), vec![css]);
+    assert_eq!(expand_scan_targets(&r, std::slice::from_ref(&css), &cwd), vec![css]);
     assert!(expand_scan_targets(&r, &[], &cwd).is_empty());
     let capped: Vec<String> = (0..9).map(|i| format!("{cwd}/f{i}.css")).collect();
     assert_eq!(

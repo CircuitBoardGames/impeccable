@@ -38,10 +38,10 @@ pub const STATIC_DESIGN_SKIP_TAGS: &[&str] = &[
     "head", "title", "meta", "link", "style", "script", "noscript", "template", "source",
 ];
 
-re!(DESIGN_BACKTICKED, "`([^`\n]{1,80})`".to_string());
+re!(DESIGN_BACKTICKED, "`([^`\n]{1,80})`");
 re!(
     DESIGN_CLASS_SELECTOR,
-    "^\\.[A-Za-z_][A-Za-z0-9_-]*$".to_string()
+    "^\\.[A-Za-z_][A-Za-z0-9_-]*$"
 );
 // A design document's prose, cut where one statement stops and the next
 // starts: punctuation, a line break, and the phrases that turn a sentence
@@ -51,29 +51,29 @@ re!(
 // the `.eyebrow` class" declare `.eyebrow`.
 re!(
     DESIGN_CLAUSE_SPLIT,
-    r"(?i)[.!?;:,()\[\]\n]|\u{2014}|\u{2013}|\binstead of\b|\brather than\b|\bas opposed to\b|\boutside\b|\bexcept\b|\bother than\b|\bunless\b|\bbesides\b|\bapart from\b|\bbeyond\b".to_string()
+    r"(?i)[.!?;:,()\[\]\n]|\u{2014}|\u{2013}|\binstead of\b|\brather than\b|\bas opposed to\b|\boutside\b|\bexcept\b|\bother than\b|\bunless\b|\bbesides\b|\bapart from\b|\bbeyond\b"
 );
 re!(
     DESIGN_NEGATING_BOUNDARY,
-    r"(?i)^(?:instead of|rather than|as opposed to)$".to_string()
+    r"(?i)^(?:instead of|rather than|as opposed to)$"
 );
 // A directive: it condemns what comes after it, and nothing before it.
 // "Use `.kicker` and never `.tagline`" sanctions the first and forbids the
 // second, and a rule that read the whole clause would lose both.
 re!(
     DESIGN_DIRECTIVE_NEGATIVE,
-    r"(?i)\b(?:no|not|never|nor|none|avoid\w*|don'?t|do not|doesn'?t|does not|drop|remove\w*|stop|skip)\b".to_string()
+    r"(?i)\b(?:no|not|never|nor|none|avoid\w*|don'?t|do not|doesn'?t|does not|drop|remove\w*|stop|skip)\b"
 );
 // A state: it describes whatever its clause is about, wherever in the clause
 // the name sits. "`.card-old` is deprecated" names the class first.
 re!(
     DESIGN_STATE_NEGATIVE,
-    r"(?i)\b(?:deprecat\w*|obsolete|legacy|forbidden|banned|disallow\w*|discourag\w*|retired|unsupported|wrong|bad|anti-?pattern\w*|no longer|not allowed|not permitted|not supported|not used)\b".to_string()
+    r"(?i)\b(?:deprecat\w*|obsolete|legacy|forbidden|banned|disallow\w*|discourag\w*|retired|unsupported|wrong|bad|anti-?pattern\w*|no longer|not allowed|not permitted|not supported|not used)\b"
 );
 // Headings that introduce a section of counter-examples.
 re!(
     DESIGN_NEGATIVE_HEADING,
-    r"(?i)\b(?:don'?ts?|do not|avoid|never|not to|anti-?patterns?|deprecat\w*|forbidden|banned|legacy|obsolete|retired|unsupported|removed|discourag\w*|disallow\w*|mistakes?|wrong|bad)\b".to_string()
+    r"(?i)\b(?:don'?ts?|do not|avoid|never|not to|anti-?patterns?|deprecat\w*|forbidden|banned|legacy|obsolete|retired|unsupported|removed|discourag\w*|disallow\w*|mistakes?|wrong|bad)\b"
 );
 // A heading that names both sides — "Do and Don't", "Dos and Don'ts",
 // "Do / Do not" — introduces a section of both, so the subsections under it
@@ -141,7 +141,7 @@ re!(
 );
 re!(
     TAILWIND_FONT_SIZE_RE,
-    format!("(?-u:\\b)text-\\[(-?[0-9.]+(?:px|rem))\\]")
+    "(?-u:\\b)text-\\[(-?[0-9.]+(?:px|rem))\\]"
 );
 re!(GOOGLE_FAMILY_PARAM_RE, "[?&]family=([^&]+)");
 re!(

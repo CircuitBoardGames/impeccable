@@ -164,10 +164,8 @@ fn is_snapshot_name(f: &str) -> bool {
         if b.len() < idx + 5 {
             return false;
         }
-        for j in idx + 1..idx + 5 {
-            if !b[j].is_ascii_digit() {
-                return false;
-            }
+        if !b[idx + 1..idx + 5].iter().all(u8::is_ascii_digit) {
+            return false;
         }
         idx += 5;
     }
@@ -278,6 +276,8 @@ fn read_newest_snapshot(slug: &str, cwd: &str, env: &Env) -> Option<Snapshot> {
 }
 
 /// JS #660: readNewestSnapshotForIdentity(slug, targetIdentity).
+// Reads every snapshot front to back, as the JS does; `next_back` would skip reads.
+#[allow(clippy::double_ended_iterator_last)]
 fn read_newest_snapshot_for_identity(slug: &str, target_identity: Option<&str>, cwd: &str, env: &Env) -> Option<Snapshot> {
     let want = target_identity.map(|s| s.to_string());
     list_snapshots(&format!("__{}.md", slug), cwd, env)

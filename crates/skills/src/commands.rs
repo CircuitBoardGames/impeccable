@@ -369,6 +369,8 @@ fn choose_install_providers(sys: &Sys, prompt: &mut Prompt, io: &mut Io, project
 }
 
 /// JS: chooseInstallScope(projectRoot, targets, detections, {yes, scopeValue})
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 fn choose_install_scope(sys: &Sys, prompt: &mut Prompt, io: &mut Io, project_root: &str, targets: &[&'static str], detections: &[Detection], yes: bool, scope_value: Option<&str>) -> R<Scope> {
     let explicit = scope_value.and_then(normalize_install_scope);
     if let Some(v) = scope_value {
@@ -697,6 +699,8 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
 
     sys.migrate_unprefix_impeccable(&install_root, scope_opt);
 
+    // (skills, agents, commands) for one local closure, not worth an alias.
+    #[allow(clippy::type_complexity)]
     let outcome: Result<(Vec<String>, Vec<bundle::AgentResult>, Vec<&'static str>), String> = (|| {
         let written = bundle::copy_provider_skills(&sys, &bundle_dir, &install_root, &targets, scope_opt)?;
         let agents = bundle::copy_provider_agents(&sys, &bundle_dir, &install_root, &targets, scope_opt)?;

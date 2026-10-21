@@ -361,7 +361,7 @@ fn fetch_next_event(
             Some(d) => d.saturating_duration_since(Instant::now()).as_millis() as i64,
             None => PER_REQUEST_TIMEOUT_MS,
         };
-        let slice = remaining.max(1000).min(PER_REQUEST_TIMEOUT_MS);
+        let slice = remaining.clamp(1000, PER_REQUEST_TIMEOUT_MS);
         let mut query = format!(
             "token={}&timeout={}&leaseMs={}",
             form_encode(token),
@@ -681,7 +681,7 @@ fn handle_poll_error(err: PollError, io: &mut Io) -> i32 {
 fn arg_value_int(args: &[String], prefix: &str, default: i64) -> i64 {
     match args.iter().find(|a| a.starts_with(prefix)) {
         Some(a) => {
-            let raw = a.splitn(2, '=').nth(1).unwrap_or("");
+            let raw = a.split_once('=').map(|x| x.1).unwrap_or("");
             let n = impeccable_core::js::parse_int(raw, 10);
             if n.is_nan() {
                 i64::MIN

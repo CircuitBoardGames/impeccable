@@ -272,7 +272,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
     let port_arg = argv.iter().find(|a| a.starts_with("--port="));
     let listener = match port_arg {
         Some(a) => {
-            let raw = a.splitn(2, '=').nth(1).unwrap_or("");
+            let raw = a.split_once('=').map(|x| x.1).unwrap_or("");
             let p = impeccable_core::js::parse_int(raw, 10);
             let port = if p.is_nan() { 0u16 } else { p as u16 };
             match TcpListener::bind(("127.0.0.1", port)) {
@@ -470,8 +470,7 @@ fn stop(argv: &[String], cwd: &str, io: &mut Io) -> i32 {
             let line = out
                 .trim()
                 .split('\n')
-                .filter(|l| !l.is_empty())
-                .last()
+                .rfind(|l| !l.is_empty())
                 .map(String::from);
             if let Some(line) = line {
                 if let Ok(j) = serde_json::from_str::<Value>(&line) {
@@ -490,7 +489,7 @@ fn stop(argv: &[String], cwd: &str, io: &mut Io) -> i32 {
             } else if !out.trim().is_empty() {
                 out.trim().to_string()
             } else {
-                format!("Command failed: impeccable live-inject --remove")
+                "Command failed: impeccable live-inject --remove".to_string()
             };
             let first = detail.split('\n').next().unwrap_or("");
             io.err(&format!(
@@ -1003,11 +1002,10 @@ fn handle_annotation(
         );
         return;
     }
-    if req
+    if !req
         .header("content-type")
         .unwrap_or("")
-        .to_ascii_lowercase()
-        != "image/png"
+        .eq_ignore_ascii_case("image/png")
     {
         respond(
             stream,
@@ -2300,6 +2298,8 @@ fn handle_manual_edit_route(
     }
 }
 
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 fn handle_manual_edit_commit(
     shared: &Shared,
     stream: &mut TcpStream,

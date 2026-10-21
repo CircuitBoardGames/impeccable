@@ -420,6 +420,8 @@ pub struct Selector {
 
 impl Selector {
     /// Parse a selector list; `Err(())` where Chrome would throw `SyntaxError`.
+    // Public API: `Err(())` is JS `SyntaxError`, which carries no detail the callers use.
+    #[allow(clippy::result_unit_err)]
     pub fn parse(text: &str) -> Result<Selector, ()> {
         let mut input = cssparser::ParserInput::new(text);
         let mut p = CssParser::new(&mut input);
@@ -728,7 +730,7 @@ impl<'a> Element for SnapEl<'a> {
     fn has_class(&self, name: &Atom, case_sensitivity: CaseSensitivity) -> bool {
         match self.snap.attr(self.id, "class") {
             Some(v) => v
-                .split(|c: char| matches!(c, ' ' | '\t' | '\n' | '\x0C' | '\r'))
+                .split([' ', '\t', '\n', '\x0C', '\r'])
                 .any(|c| !c.is_empty() && case_sensitivity.eq(name.0.as_bytes(), c.as_bytes())),
             None => false,
         }

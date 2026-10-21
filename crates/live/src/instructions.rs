@@ -137,6 +137,8 @@ pub fn instructions_for_event(event: &Map<String, Value>, self_cmd: &str) -> Opt
     }
 }
 
+// The `is_some()` check sits in a compound condition; an if-let would split the chain.
+#[allow(clippy::unnecessary_unwrap)]
 fn generate_instructions(event: &Map<String, Value>, self_cmd: &str) -> String {
     let id = js_str(event.get("id"));
     let count = js_str(event.get("count"));

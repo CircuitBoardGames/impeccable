@@ -16,7 +16,7 @@ fn normalize_route_target(route: &str) -> Option<String> {
     if !route.starts_with('/') || route.contains("..") {
         return None;
     }
-    let cut = route.split(|c| c == '?' || c == '#').next().unwrap_or("");
+    let cut = route.split(['?', '#']).next().unwrap_or("");
     // collapse //+ -> /
     let mut collapsed = String::with_capacity(cut.len());
     let mut prev_slash = false;
@@ -135,10 +135,9 @@ fn is_json_scalar(raw: &str) -> bool {
 pub fn split_frontmatter(text: &str) -> Option<(String, usize)> {
     let after_open = if let Some(r) = text.strip_prefix("---\r\n") {
         (r, 5)
-    } else if let Some(r) = text.strip_prefix("---\n") {
-        (r, 4)
     } else {
-        return None;
+        let r = text.strip_prefix("---\n")?;
+        (r, 4)
     };
     let (rest, open_len) = after_open;
     // find the earliest "\r?\n---" followed by "\r?\n" or end

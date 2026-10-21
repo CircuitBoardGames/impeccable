@@ -334,7 +334,7 @@ impl<'a> Ctx<'a> {
 
 re!(VIEWPORT_RE, format!("^({D}{{2,5}})[xX]({D}{{2,5}})$"));
 re!(URL_RE, "^(?i:https?|file)://");
-re!(WHITESPACE_RE, impeccable_core::js::WS.to_string());
+re!(WHITESPACE_RE, impeccable_core::js::WS);
 re!(WS_RUN_RE, format!("{}+", impeccable_core::js::WS));
 re!(FILE_URL_RE, "^(?i:file):");
 

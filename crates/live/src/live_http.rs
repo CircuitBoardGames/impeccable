@@ -116,10 +116,10 @@ fn normalize_path(p: &str) -> String {
     }
     let mut out = String::from("/");
     out.push_str(&segs.join("/"));
-    if p.ends_with("/..") || p.ends_with("/.") {
-        if !out.ends_with('/') {
-            out.push('/');
-        }
+    if (p.ends_with("/..") || p.ends_with("/."))
+        && !out.ends_with('/')
+    {
+        out.push('/');
     }
     out
 }
@@ -723,7 +723,7 @@ mod tests {
         // (connection closed) instead of accumulating headers unbounded.
         let mut raw = b"GET / HTTP/1.1\r\nHost: h\r\n".to_vec();
         raw.extend_from_slice(b"X-Big: ");
-        raw.extend(std::iter::repeat(b'a').take(2 * MAX_HEAD_BYTES as usize));
+        raw.extend(std::iter::repeat_n(b'a', 2 * MAX_HEAD_BYTES as usize));
         raw.extend_from_slice(b"\r\n\r\n");
         assert!(read_raw(raw, 1024 * 1024).is_none());
     }

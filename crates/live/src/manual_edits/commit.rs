@@ -49,6 +49,8 @@ pub struct CommitOptions<'a> {
     pub provider: Option<&'a str>,
     pub timeout_ms: Option<f64>,
     /// chat provider callback: (batch, repair) -> raw result value.
+    // A callback signature spelled out where it is used; an alias would hide it.
+    #[allow(clippy::type_complexity)]
     pub apply_batch_to_source:
         Option<&'a mut dyn FnMut(&Value, Option<&Value>) -> Result<Value, String>>,
     pub chat_available: Option<&'a dyn Fn() -> bool>,
@@ -96,6 +98,8 @@ struct Agent<'a> {
     env: Env,
     provider: Option<String>,
     timeout_ms: Option<f64>,
+    // A callback signature spelled out where it is used; an alias would hide it.
+    #[allow(clippy::type_complexity)]
     apply_batch_to_source:
         Option<&'a mut dyn FnMut(&Value, Option<&Value>) -> Result<Value, String>>,
     chat_available: Option<&'a dyn Fn() -> bool>,
@@ -103,12 +107,7 @@ struct Agent<'a> {
 
 impl Agent<'_> {
     fn run(&mut self, batch: &Value) -> Result<Value, String> {
-        let cb = match self.apply_batch_to_source.as_mut() {
-            Some(f) => {
-                Some(&mut **f as &mut dyn FnMut(&Value, Option<&Value>) -> Result<Value, String>)
-            }
-            None => None,
-        };
+        let cb = self.apply_batch_to_source.as_mut().map(|f| &mut **f as &mut dyn FnMut(&Value, Option<&Value>) -> Result<Value, String>);
         run_copy_edit_batch_agent(
             batch,
             &self.cwd,
@@ -327,7 +326,7 @@ fn repair_attempt_limit(env: &Env) -> f64 {
     if !value.is_finite() {
         return DEFAULT_REPAIR_ATTEMPTS;
     }
-    value.trunc().min(10.0).max(1.0)
+    value.trunc().clamp(1.0, 10.0)
 }
 
 fn slice_map<F: Fn(&Value) -> Value>(items: &[Value], limit: usize, f: F) -> Vec<Value> {
@@ -1365,6 +1364,8 @@ fn changed_files_since_snapshot(
 }
 
 /// JS: rollbackChangedFiles(cwd, snapshot, extraFiles, scopeFiles)
+// The `is_some()` check sits in a compound condition; an if-let would split the chain.
+#[allow(clippy::unnecessary_unwrap)]
 fn rollback_changed_files(
     cwd: &str,
     snapshot: &Map<String, Value>,

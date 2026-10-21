@@ -189,7 +189,7 @@ pub fn browser_design_system_config(config: &BrowserConfig) -> Option<DesignSyst
     let raw = config.design_system.as_ref()?;
     let obj = raw.as_object()?;
     // JS `!raw?.present`.
-    if !obj.get("present").map_or(false, truthy) {
+    if !obj.get("present").is_some_and(truthy) {
         return None;
     }
     let arr = |k: &str| -> Vec<serde_json::Value> {
@@ -669,22 +669,21 @@ pub fn pseudo_element_host_selector(selector: &str) -> Option<String> {
         }
 
         let mut end = i + 1;
-        let is_pseudo_element;
-        if raw.get(end) == Some(&':') {
+        let is_pseudo_element = if raw.get(end) == Some(&':') {
             end += 1;
             let name_start = end;
             while is_selector_name_char(raw.get(end).copied()) {
                 end += 1;
             }
-            is_pseudo_element = end > name_start;
+            end > name_start
         } else {
             let name_start = end;
             while is_selector_name_char(raw.get(end).copied()) {
                 end += 1;
             }
             let name: String = raw[name_start..end].iter().collect();
-            is_pseudo_element = LEGACY_NAMES.contains(&crate::js::to_lower_case(&name).as_str());
-        }
+            LEGACY_NAMES.contains(&crate::js::to_lower_case(&name).as_str())
+        };
         if !is_pseudo_element {
             output.push(ch);
             i += 1;
@@ -902,7 +901,7 @@ pub fn is_likely_hashed_class(c: &str) -> bool {
 fn class_list(dom: &dyn Dom, el: ElId) -> Vec<String> {
     let cls = dom.attr(el, "class").unwrap_or_default();
     let mut out: Vec<String> = Vec::new();
-    for tok in cls.split(|c: char| matches!(c, ' ' | '\t' | '\n' | '\x0C' | '\r')) {
+    for tok in cls.split([' ', '\t', '\n', '\x0C', '\r']) {
         if tok.is_empty() || out.iter().any(|t| t == tok) {
             continue;
         }
@@ -1029,7 +1028,7 @@ pub fn visual_contrast_result_el(dom: &dyn Dom, result: &serde_json::Value) -> O
     if result.get("status").and_then(|v| v.as_str()) != Some("fail") {
         return None;
     }
-    if !result.get("finding").map_or(false, truthy) {
+    if !result.get("finding").is_some_and(truthy) {
         return None;
     }
     let selector = result.get("selector")?;
@@ -1419,8 +1418,8 @@ pub fn collect_browser_findings(dom: &dyn Dom, config: &BrowserConfig) -> Collec
     }
 
     // Two different tell hues on one page is the palette; one is an accent.
-    if palette_tells.iter().any(|t| *t == ec::TellHue::Cyan)
-        && palette_tells.iter().any(|t| *t == ec::TellHue::Purple)
+    if palette_tells.contains(&ec::TellHue::Cyan)
+        && palette_tells.contains(&ec::TellHue::Purple)
     {
         for (el, finding) in palette_ink {
             if rule_ok(&finding.type_) {

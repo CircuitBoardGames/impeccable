@@ -222,6 +222,8 @@ enum State {
 
 /// JS: detect-text.mjs#stripJsComments. Blanks comments without moving any
 /// following source so line numbers survive.
+// The `is_some()` check sits in a compound condition; an if-let would split the chain.
+#[allow(clippy::unnecessary_unwrap)]
 pub fn strip_js_comments(content: &str, jsx: bool) -> String {
     let chars: Vec<char> = content.chars().collect();
     let mut state = State::Code;
@@ -350,9 +352,7 @@ pub fn strip_js_comments(content: &str, jsx: bool) -> String {
             template_expression_depths[depth_index] =
                 template_expression_depths[depth_index].saturating_sub(1);
             last_closed_brace_kind = brace_kinds.pop().unwrap_or("");
-            if jsx_expression_depth > 0 {
-                jsx_expression_depth -= 1;
-            }
+            jsx_expression_depth = jsx_expression_depth.saturating_sub(1);
             sig.record(ch);
             if template_expression_depths[depth_index] == 0 {
                 template_expression_depths.pop();

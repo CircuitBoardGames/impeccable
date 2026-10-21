@@ -13,7 +13,13 @@
 //! Original: Copyright (C) 1993 by Sun Microsystems, Inc. (fdlibm), as
 //! carried in V8 under the V8 license.
 
-#![allow(clippy::excessive_precision)]
+// Port fidelity: the constants, `x - x` (NaN for inf/NaN input) and loop shapes are fdlibm's own.
+#![allow(
+    clippy::excessive_precision,
+    clippy::approx_constant,
+    clippy::eq_op,
+    clippy::explicit_counter_loop
+)]
 
 #[inline]
 fn high_word(d: f64) -> i32 {

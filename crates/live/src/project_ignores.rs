@@ -171,7 +171,7 @@ fn read_live_served_pages(
 
     let mut roots: Vec<String> = Vec::new();
     for glob in &files {
-        let wildcard_at = glob.find(|c| matches!(c, '*' | '?' | '{'));
+        let wildcard_at = glob.find(['*', '?', '{']);
         let head = match wildcard_at {
             Some(i) => &glob[..i],
             None => glob.as_str(),

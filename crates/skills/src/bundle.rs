@@ -357,13 +357,11 @@ fn copy_or_extract_local_bundle(sys: &Sys, source_value: &str) -> Result<String,
     }
     let tmp = util::tmpdir(&sys.env);
     let staging = util::mkdtemp(&jsp::join(&[&tmp, "impeccable-local-bundle-"]))?;
-    let result = (|| -> Result<(), String> {
-        if util::is_dir(&source) {
-            util::copy_dir(&source, &staging)
-        } else {
-            extract_zip_file(&source, &staging, &sys.cwd)
-        }
-    })();
+    let result = if util::is_dir(&source) {
+        util::copy_dir(&source, &staging)
+    } else {
+        extract_zip_file(&source, &staging, &sys.cwd)
+    };
     match result {
         Ok(()) => Ok(staging),
         Err(e) => {

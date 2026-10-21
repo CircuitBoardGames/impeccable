@@ -102,7 +102,7 @@ pub fn js_number_to_string(v: f64) -> String {
         return format!("{}", v as i128);
     }
     let a = v.abs();
-    if a >= 1e-6 && a < 1e21 {
+    if (1e-6..1e21).contains(&a) {
         let s = format!("{}", v);
         return s;
     }
@@ -314,7 +314,7 @@ pub fn node_read_error(p: &str, err: &std::io::Error) -> String {
         std::io::ErrorKind::PermissionDenied => format!("EACCES: permission denied, open '{}'", p),
         _ => {
             if err.raw_os_error() == Some(21) {
-                format!("EISDIR: illegal operation on a directory, read")
+                "EISDIR: illegal operation on a directory, read".to_string()
             } else {
                 format!("{}", err)
             }

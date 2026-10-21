@@ -338,6 +338,9 @@ pub struct Facts {
     pub hits: Vec<HitTest>,
 }
 
+/// One `@keyframes` rule: `[name, frames]`, each frame a list of `[prop, value]`.
+pub type Keyframes = (String, Vec<Vec<(String, String)>>);
+
 /// The serialized page.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Snapshot {
@@ -361,7 +364,7 @@ pub struct Snapshot {
     pub html: String,
     /// `[name, frames]` in stylesheet order (first rule per name wins).
     #[serde(default)]
-    pub keyframes: Vec<(String, Vec<Vec<(String, String)>>)>,
+    pub keyframes: Vec<Keyframes>,
     /// `__snapLinkedStylesheetText()`: the readable linked-stylesheet corpus
     /// (#709). Absent in captures older than that change.
     #[serde(rename = "linkedCss", default)]
@@ -540,13 +543,18 @@ fn rect4(v: &[f64; 4]) -> Rect {
 
 /// [`Dom`] over a [`Snapshot`], with per-run memo tables, a fact table for
 /// hit tests, and the record of what the run could not answer.
+/// A hit test at one point: the top element and the element stack.
+type PointHit = (Option<ElId>, Vec<ElId>);
+/// A memoised `closest(selector)` answer.
+type ClosestResult = Result<Option<ElId>, SelectorError>;
+
 pub struct SnapshotDom {
     pub snap: Snapshot,
-    hits: RefCell<HashMap<(u64, u64), (Option<ElId>, Vec<ElId>)>>,
+    hits: RefCell<HashMap<(u64, u64), PointHit>>,
     misses: RefCell<Vec<[f64; 2]>>,
     missed_keys: RefCell<HashSet<(u64, u64)>>,
     selectors: RefCell<HashMap<String, Option<Selector>>>,
-    closest_cache: RefCell<HashMap<(ElId, String), Result<Option<ElId>, SelectorError>>>,
+    closest_cache: RefCell<HashMap<(ElId, String), ClosestResult>>,
     text_cache: RefCell<HashMap<ElId, String>>,
     unknown_props: RefCell<Vec<String>>,
 }
@@ -879,7 +887,7 @@ impl Dom for SnapshotDom {
                     None => {
                         let mut u = self.unknown_props.borrow_mut();
                         let key = format!("{pseudo}{prop}");
-                        if !u.iter().any(|p| *p == key) {
+                        if !u.contains(&key) {
                             u.push(key);
                         }
                         Some(String::new())
@@ -962,6 +970,8 @@ fn metric(m: &[Option<f64>], i: usize) -> f64 {
 }
 
 /// `CSS.escape(s)` (CSSOM serialize-an-identifier).
+// One branch per CSSOM serialize-an-identifier step, even where two steps emit the same.
+#[allow(clippy::if_same_then_else)]
 pub fn css_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 4);
     let chars: Vec<char> = s.chars().collect();
@@ -1087,7 +1097,7 @@ mod tests {
         assert!(!d.matches(4, "div:hover").unwrap());
         assert!(d.matches(6, "svg").unwrap());
         assert!(
-            d.matches(6, "SVG").unwrap() == false,
+            !d.matches(6, "SVG").unwrap(),
             "svg type selectors are case-sensitive"
         );
         assert!(d.matches(4, "DIV").unwrap());
@@ -1097,7 +1107,7 @@ mod tests {
         assert!(d.matches(3, "body:has(> div)").unwrap());
         assert!(d.matches(2, ":empty").unwrap());
         assert!(!d.matches(4, ":empty").unwrap());
-        assert!(d.matches(4, "div::before").unwrap() == false);
+        assert!(!d.matches(4, "div::before").unwrap());
         assert!(d.matches(4, "div:foo").is_err());
         assert!(d.query_all(None, ".x)").is_err());
         assert_eq!(

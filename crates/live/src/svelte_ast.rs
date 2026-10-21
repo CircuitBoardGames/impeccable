@@ -1352,7 +1352,7 @@ pub fn analyze_svelte_markup(
 
 fn apply_replacements(source: &[u16], replacements: &[Replacement]) -> String {
     let mut sorted: Vec<&Replacement> = replacements.iter().collect();
-    sorted.sort_by(|a, b| b.start.cmp(&a.start));
+    sorted.sort_by_key(|r| std::cmp::Reverse(r.start));
     let mut out: Vec<u16> = source.to_vec();
     for r in sorted {
         let s = r.start.min(out.len());

@@ -490,6 +490,8 @@ static HTML_STYLE_BLOCK_RE: Lazy<Regex> =
 /// many elements matched it), `source_after_unwrap` the source file with the
 /// variant unwrapped (to find its own `<style>` block when the file is
 /// HTML-like).
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 pub fn plan(
     cwd: &str,
     target_file: &str,

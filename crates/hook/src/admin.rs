@@ -838,7 +838,7 @@ fn strip_impeccable_hook_entry(entry: &Value) -> Option<Value> {
     let stripped: Vec<Value> = hooks
         .iter()
         .filter_map(strip_impeccable_hook_entry)
-        .filter(|v| truthy_json(v))
+        .filter(truthy_json)
         .collect();
     if stripped.is_empty() && hooks.iter().any(value_has_impeccable_hook_marker) {
         return None;
@@ -859,7 +859,7 @@ fn strip_impeccable_hook_entries(entries: Option<&Value>) -> Vec<Value> {
         Some(Value::Array(a)) => a
             .iter()
             .filter_map(strip_impeccable_hook_entry)
-            .filter(|v| truthy_json(v))
+            .filter(truthy_json)
             .collect(),
         _ => vec![],
     }

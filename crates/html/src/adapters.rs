@@ -461,6 +461,8 @@ pub fn check_element_borders(
 }
 
 /// JS: checks.mjs#checkElementColors(el, style, tag, window, customPropMap, hasAnchorInheritRule)
+// `!(a >= b)` is deliberately true for NaN (JS comparison semantics); `<` would flip it.
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 pub fn check_element_colors(
     el: &StaticElement<'_>,
     style: &StyleValues,

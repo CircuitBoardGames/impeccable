@@ -75,7 +75,7 @@ pub fn check_static_page_typography(doc: &StaticDocument) -> Vec<RuleHit> {
 /// `content-visibility` entry, so a declared `content-visibility: hidden`
 /// never reaches the static computed style.
 fn is_rendered_type_element(el: &StaticElement<'_>) -> bool {
-    let mut current = Some(el.clone());
+    let mut current = Some(*el);
     while let Some(node) = current {
         if node.get_attribute("hidden").is_some() {
             return false;

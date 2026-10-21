@@ -318,8 +318,8 @@ fn wrap_cli(args: &[String], io: &mut Io) -> i32 {
                 }
                 failed.push(json!({
                     "entryId": entry.get("id").cloned().unwrap_or(Value::Null),
-                    "ref": op.get("ref").cloned().filter(|v| truthy(v)).unwrap_or(Value::Null),
-                    "originalText": op.get("originalText").cloned().filter(|v| truthy(v)).unwrap_or(Value::Null),
+                    "ref": op.get("ref").cloned().filter(truthy).unwrap_or(Value::Null),
+                    "originalText": op.get("originalText").cloned().filter(truthy).unwrap_or(Value::Null),
                     "reason": "ambiguous_or_unmatched_pending_edit",
                 }));
             }

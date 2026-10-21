@@ -73,7 +73,7 @@ pub fn manual_edit_apply_chunk_size(env: &Env) -> i64 {
     )
 }
 
-fn arr<'a>(v: Option<&'a Value>) -> &'a [Value] {
+fn arr(v: Option<&Value>) -> &[Value] {
     match v {
         Some(Value::Array(a)) => a.as_slice(),
         _ => &[],
@@ -327,11 +327,8 @@ fn compact_source_match(m: Option<&Value>, cwd: &str) -> Value {
         return Value::Null;
     }
     let mut out = Map::new();
-    match summarize_manual_log_file(file.as_ref(), cwd) {
-        Some(f) => {
-            out.insert("file".into(), json!(f));
-        }
-        None => {}
+    if let Some(f) = summarize_manual_log_file(file.as_ref(), cwd) {
+        out.insert("file".into(), json!(f));
     }
     out.insert(
         "line".into(),

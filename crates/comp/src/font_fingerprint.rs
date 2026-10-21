@@ -6,6 +6,9 @@
 //! `raster::resize`. Ported line-for-line, including the f32 gray/coverage
 //! stores and the `+value.toFixed(4)` rounding of the emitted features.
 
+// Index loops mirror the JS port and walk several parallel buffers by the same index.
+#![allow(clippy::needless_range_loop)]
+
 use crate::jsnum::{round, round_fixed};
 use crate::metrics::to_gray;
 use crate::raster::{resize, Image};

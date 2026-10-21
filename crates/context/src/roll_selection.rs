@@ -29,6 +29,8 @@ fn rank<T: Clone>(items: &[T], input: &str, id_for: impl Fn(&T) -> String) -> Ve
     scored.into_iter().map(|(it, _, _)| it).collect()
 }
 
+// Float guards kept explicit (`x == 1.0`); a float literal pattern reads like exact matching.
+#[allow(clippy::redundant_guards)]
 fn tickets_for_rating(rating: Option<&Value>) -> usize {
     match rating.and_then(|r| r.as_f64()) {
         Some(x) if x == 1.0 => 1,
@@ -208,6 +210,8 @@ fn empty_match(grain: Option<&str>, platform: Option<&str>, platform_excluded: u
 }
 
 /// JS: selectApprovedCompositions
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 pub fn select_approved_compositions(
     scope: &str,
     key: &str,

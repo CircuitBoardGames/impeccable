@@ -219,7 +219,7 @@ pub const COLOR_FUNCTION_NAMES: &[&str] = &[
     "color-mix",
 ];
 
-re!(FN_NAME, r"([a-zA-Z][a-zA-Z\-]*)\(".to_string());
+re!(FN_NAME, r"([a-zA-Z][a-zA-Z\-]*)\(");
 
 /// JS `extractColorFunctionTokens(value)`.
 pub fn extract_color_function_tokens(value: Option<&str>) -> Vec<String> {
@@ -263,7 +263,7 @@ pub fn extract_color_function_tokens(value: Option<&str>) -> Vec<String> {
 
 re!(
     HEX_IN_GRADIENT,
-    r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?-u:\b)".to_string()
+    r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?-u:\b)"
 );
 
 /// JS `parseGradientColors(bgImage)`.
@@ -459,6 +459,8 @@ pub fn oklch_to_rgb(l: f64, c: f64, h: f64) -> Rgba {
 }
 
 /// JS `labToRgb(L, a, b)`.
+// Matrix coefficients kept digit-for-digit as published, trailing zeros included.
+#[allow(clippy::excessive_precision)]
 pub fn lab_to_rgb(l: f64, a: f64, b: f64) -> Rgba {
     let kappa = 24389.0 / 27.0;
     let epsilon = 216.0 / 24389.0;
@@ -496,6 +498,8 @@ pub fn lch_to_rgb(l: f64, c: f64, h: f64) -> Rgba {
 }
 
 /// JS `colorFunctionToRgb(space, c1, c2, c3)`.
+// Matrix coefficients kept digit-for-digit as published, trailing zeros included.
+#[allow(clippy::excessive_precision)]
 pub fn color_function_to_rgb(space: &str, c1: f64, c2: f64, c3: f64) -> Option<Rgba> {
     match space {
         "srgb" => Some(Rgba::new(
@@ -784,7 +788,7 @@ re!(
         r"rgba?\({WS}*({D}+(?:\.{D}+)?){WS}*,?{WS}*({D}+(?:\.{D}+)?){WS}*,?{WS}*({D}+(?:\.{D}+)?)(?:{WS}*[,/]{WS}*([0-9.]+)(%)?)?{WS}*\)"
     )
 );
-re!(ANY_HEX, r"^#([0-9a-fA-F]{3,8})$".to_string());
+re!(ANY_HEX, r"^#([0-9a-fA-F]{3,8})$");
 re!(
     ANY_OKLCH,
     format!(

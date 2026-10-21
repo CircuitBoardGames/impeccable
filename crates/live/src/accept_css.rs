@@ -870,7 +870,7 @@ pub fn prune_unused_selectors(
             .into_iter()
             .filter(|w| !skip.contains(trim(&slice_utf16(&source, w.start, w.end))))
             .collect();
-        unused.sort_by(|a, b| b.start.cmp(&a.start));
+        unused.sort_by_key(|w| std::cmp::Reverse(w.start));
         if unused.is_empty() {
             break;
         }

@@ -639,7 +639,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
             }
             if let Some(url) = &watched_dev_url {
                 ticks += 1;
-                if ticks % 3 == 0 {
+                if ticks.is_multiple_of(3) {
                     if crate::dev_url::answers(url) {
                         dev_misses = 0;
                     } else {

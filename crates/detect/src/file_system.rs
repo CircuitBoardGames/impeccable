@@ -126,18 +126,18 @@ pub fn resolve_import(specifier: &str, from_dir: &str, file_set: &[String]) -> O
         return None;
     }
     let base = jsp::resolve(from_dir, &[specifier]);
-    if file_set.iter().any(|f| *f == base) {
+    if file_set.contains(&base) {
         return Some(base);
     }
     for ext in SCANNABLE_EXTENSIONS {
         let with_ext = format!("{base}{ext}");
-        if file_set.iter().any(|f| *f == with_ext) {
+        if file_set.contains(&with_ext) {
             return Some(with_ext);
         }
     }
     for ext in SCANNABLE_EXTENSIONS {
         let index_file = jsp::join(&[&base, &format!("index{ext}")]);
-        if file_set.iter().any(|f| *f == index_file) {
+        if file_set.contains(&index_file) {
             return Some(index_file);
         }
     }
@@ -446,6 +446,8 @@ fn http_get_localhost(port: u32, deadline: Instant) -> Option<(Vec<(String, Stri
     None
 }
 
+// (status, headers, body): a private one-use tuple, not worth an alias.
+#[allow(clippy::type_complexity)]
 fn http_get_once(
     host: &str,
     port: u16,

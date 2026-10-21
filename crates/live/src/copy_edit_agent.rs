@@ -110,6 +110,8 @@ pub fn parse_copy_edit_batch_result(text: &str) -> Option<Value> {
 
 /// JS: runCopyEditBatchAgent(batch, opts)
 #[allow(clippy::too_many_arguments)]
+// A callback signature spelled out where it is used; an alias would hide it.
+#[allow(clippy::type_complexity)]
 pub fn run_copy_edit_batch_agent(
     batch: &Value,
     cwd: &str,
@@ -290,16 +292,16 @@ pub fn run_copy_edit_post_apply_checks(cwd: &str, files: &[String]) -> Value {
                 "marker": marker,
             }));
         }
-        if relative_file.ends_with(".json") {
-            if serde_json::from_str::<Value>(&content).is_err() {
-                let message = crate::json_error::json_parse_error(&content)
-                    .unwrap_or_else(|| "Unexpected token".to_string());
-                failures.push(json!({
-                    "file": relative_file,
-                    "reason": "invalid_json",
-                    "message": message,
-                }));
-            }
+        if relative_file.ends_with(".json")
+            && serde_json::from_str::<Value>(&content).is_err()
+        {
+            let message = crate::json_error::json_parse_error(&content)
+                .unwrap_or_else(|| "Unexpected token".to_string());
+            failures.push(json!({
+                "file": relative_file,
+                "reason": "invalid_json",
+                "message": message,
+            }));
         }
         if let Some(check) = check_framework_source_syntax(cwd, relative_file, &file) {
             if let Some(failure) = check.get("failure") {
@@ -1396,10 +1398,7 @@ fn compute_command_authed(command: &str) -> bool {
         let end = stdout.rfind('}')?;
         serde_json::from_str::<Value>(&stdout[start..=end]).ok()
     });
-    match parsed {
-        Some(v) if v.get("is_error") == Some(&Value::Bool(true)) => false,
-        _ => true,
-    }
+    !matches!(parsed, Some(v) if v.get("is_error") == Some(&Value::Bool(true)))
 }
 
 /// JS: describeNoProviderError({ exists, chatAvailable, env })

@@ -807,17 +807,16 @@ pub fn ensure_hook_git_excludes(rt: &Runtime, cwd: &str) -> GitExcludeResult {
         };
         format!("{prefix}{gap}{block}\n")
     };
-    if updated != existing {
-        if std::fs::create_dir_all(jsp::dirname(&target.path)).is_err()
-            || std::fs::write(&target.path, &updated).is_err()
-        {
-            return GitExcludeResult {
-                mode: "error",
-                file: None,
-                changed: false,
-                patterns: default_patterns,
-            };
-        }
+    if updated != existing
+        && (std::fs::create_dir_all(jsp::dirname(&target.path)).is_err()
+            || std::fs::write(&target.path, &updated).is_err())
+    {
+        return GitExcludeResult {
+            mode: "error",
+            file: None,
+            changed: false,
+            patterns: default_patterns,
+        };
     }
     GitExcludeResult {
         mode: "git-info-exclude",
@@ -1974,10 +1973,7 @@ fn looks_like_apply_patch(raw: Option<&Value>) -> bool {
     if !APPLY_PATCH_MARKER_RE.is_match(s) {
         return false;
     }
-    match serde_json::from_str::<Value>(s) {
-        Ok(Value::Object(_)) | Ok(Value::Array(_)) => false,
-        _ => true,
-    }
+    !matches!(serde_json::from_str::<Value>(s), Ok(Value::Object(_)) | Ok(Value::Array(_)))
 }
 
 /// JS: applyPatchText(rawArgs)

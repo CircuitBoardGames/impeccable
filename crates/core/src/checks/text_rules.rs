@@ -141,6 +141,8 @@ fn is_accent_color(css_color: &str) -> bool {
 }
 
 /// JS: checks.mjs#isKickerCandidate.
+// `!(a >= b)` is deliberately true for NaN (JS comparison semantics); `<` would flip it.
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 pub fn is_kicker_candidate(o: &KickerCandidateInput) -> bool {
     re!(SLASH_PATH_RE, r"^/[0-9A-Za-z_-]+");
     re!(
@@ -168,7 +170,7 @@ pub fn is_kicker_candidate(o: &KickerCandidateInput) -> bool {
         return false;
     }
     let kicker_len = utf16_len(o.kicker_text);
-    if o.kicker_text.is_empty() || kicker_len < 2 || kicker_len > 34 {
+    if o.kicker_text.is_empty() || !(2..=34).contains(&kicker_len) {
         return false;
     }
     if STEP_RE.is_match(o.kicker_text) || TWO_DIGITS_RE.is_match(o.kicker_text) {

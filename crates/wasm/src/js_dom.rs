@@ -90,6 +90,8 @@ thread_local! {
     static PARENT_CACHE: RefCell<HashMap<ElId, Option<ElId>>> = RefCell::new(HashMap::new());
     static TAG_CACHE: RefCell<HashMap<ElId, String>> = RefCell::new(HashMap::new());
     static ATTR_CACHE: RefCell<HashMap<ElId, HashMap<String, Option<String>>>> = RefCell::new(HashMap::new());
+    // Mirrors the per-element memo the other caches use; the value is closest()'s result.
+    #[allow(clippy::type_complexity)]
     static CLOSEST_CACHE: RefCell<HashMap<ElId, HashMap<String, Result<Option<ElId>, SelectorError>>>> = RefCell::new(HashMap::new());
     static CHILDREN_CACHE: RefCell<HashMap<ElId, Vec<ElId>>> = RefCell::new(HashMap::new());
     static TEXT_NODES_CACHE: RefCell<HashMap<ElId, Vec<String>>> = RefCell::new(HashMap::new());
@@ -350,7 +352,7 @@ impl Dom for JsDom {
     /// from here.
     fn text_line_rects(&self, el: ElId) -> Option<Vec<Rect>> {
         Some(merge_text_rects_into_lines(
-            text_rects(el).chunks_exact(8).map(to_rect).collect(),
+            text_rects(el).as_chunks::<8>().0.iter().map(|c| to_rect(c)).collect(),
         ))
     }
 }

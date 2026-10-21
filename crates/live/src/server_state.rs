@@ -1609,8 +1609,7 @@ pub fn run_generation_preflight(
     let line = stdout
         .trim()
         .split('\n')
-        .filter(|l| !l.is_empty())
-        .last()
+        .rfind(|l| !l.is_empty())
         .map(String::from);
     let Some(line) = line else {
         return PreflightOutcome::Err {

@@ -205,7 +205,7 @@ impl FontRenderer for CdpFontRenderer {
             .map(|c| {
                 format!(
                     "<div class=\"row\"><div class=\"lab\">{} {} · {}px</div><div class=\"s\" style=\"font-family:'{}';font-weight:{};font-size:{}px;text-transform:{}\">{}</div></div>",
-                    &c.family,
+                    c.family,
                     wfmt(c.weight),
                     c.font_size_px,
                     c.family,

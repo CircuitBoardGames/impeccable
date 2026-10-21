@@ -242,7 +242,7 @@ pub fn check_quality(dom: &dyn Dom, q: &QualityInput) -> Vec<RuleHit> {
     // catches computed opacity on the element itself (both engines).
     {
         let op = parse_float(&st("opacity"));
-        if op.is_finite() && op < 0.15 && op >= 0.0 {
+        if op.is_finite() && (0.0..0.15).contains(&op) {
             let bg = st("backgroundImage");
             if tag == "img" || QUALITY_RASTER_URL_RE.is_match(&bg) {
                 let label = if tag == "img" {

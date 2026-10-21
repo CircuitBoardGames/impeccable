@@ -258,7 +258,7 @@ fn dev_server_signals() -> Value {
     open.sort();
     let mut m = Map::new();
     m.insert("running".into(), Value::Bool(!open.is_empty()));
-    m.insert("ports".into(), Value::Array(open.into_iter().map(|p| Value::from(p)).collect()));
+    m.insert("ports".into(), Value::Array(open.into_iter().map(Value::from).collect()));
     Value::Object(m)
 }
 
@@ -266,7 +266,7 @@ const SCANNABLE_EXT: [&str; 11] = [".html", ".htm", ".css", ".scss", ".jsx", ".t
 const SOURCE_DIRS: [&str; 5] = ["src", "app", "components", "pages", "public"];
 
 fn is_vendored_path(rel: &str) -> bool {
-    let segs: Vec<&str> = rel.split(|c| c == '/' || c == '\\').collect();
+    let segs: Vec<&str> = rel.split(['/', '\\']).collect();
     let dirs = &segs[..segs.len().saturating_sub(1)];
     dirs.iter().any(|seg| {
         (seg.starts_with('.') && *seg != ".vitepress" && *seg != ".vuepress" && *seg != ".storybook")

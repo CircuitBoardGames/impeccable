@@ -51,7 +51,7 @@ fn resolve_linked_css_path(file_dir: &str, href: &str) -> String {
         .split(['/', '\\'])
         .filter(|p| !p.is_empty() && *p != ".")
         .collect();
-    if segments.iter().any(|p| *p == "..") {
+    if segments.contains(&"..") {
         let joined = segments
             .iter()
             .filter(|p| **p != "..")

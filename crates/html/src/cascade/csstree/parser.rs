@@ -745,10 +745,9 @@ impl Parser {
 
     fn combinator(&mut self) -> PResult<Node> {
         let start = self.ts.token_start;
-        let name;
-        match self.ts.token_type {
+        let name = match self.ts.token_type {
             WHITESPACE => {
-                name = " ".to_string();
+                " ".to_string()
             }
             DELIM => {
                 match self.ts.char_code_at(self.ts.token_start) {
@@ -762,14 +761,14 @@ impl Parser {
                     }
                     _ => return self.error(),
                 }
-                name = self.ts.substr_to_cursor(start);
+                self.ts.substr_to_cursor(start)
             }
             _ => {
                 // JS: `name` stays undefined; unreachable from the selector
                 // recognizer, which only calls this for the delims above.
-                name = String::new();
+                String::new()
             }
-        }
+        };
         Ok(Node::Combinator { name })
     }
 
@@ -1066,13 +1065,13 @@ impl Parser {
         }
 
         if let Some(av) = &a {
-            if av.starts_with('+') {
-                a = Some(av[1..].to_string());
+            if let Some(rest) = av.strip_prefix('+') {
+                a = Some(rest.to_string());
             }
         }
         if let Some(bv) = &b {
-            if bv.starts_with('+') {
-                b = Some(bv[1..].to_string());
+            if let Some(rest) = bv.strip_prefix('+') {
+                b = Some(rest.to_string());
             }
         }
         Ok(Node::AnPlusB { a, b })

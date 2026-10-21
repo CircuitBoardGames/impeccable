@@ -66,9 +66,9 @@ pub fn resolve_font_size_px(el: &StaticElement<'_>) -> f64 {
         } else if v.ends_with("rem") {
             px = num * 16.0;
         } else if v.ends_with("em") {
-            px = num * px;
+            px *= num;
         } else if v.ends_with('%') {
-            px = (num / 100.0) * px;
+            px *= num / 100.0;
         } else {
             px = num;
         }
@@ -201,7 +201,7 @@ pub fn check_quality(q: &QualityInput<'_, '_>) -> Vec<RuleHit> {
     // catches computed opacity on the element itself (both engines).
     {
         let op = parse_float(sv(style, "opacity"));
-        if op.is_finite() && op < 0.15 && op >= 0.0 {
+        if op.is_finite() && (0.0..0.15).contains(&op) {
             let bg = sv(style, "backgroundImage");
             if tag == "img" || RASTER_URL_RE.is_match(bg) {
                 let label = if tag == "img" {

@@ -566,6 +566,8 @@ fn cursor_block_message(
 }
 
 /// JS: findingSignature(findings)
+// `> 0 || < 0` is false for NaN; clippy's `!= 0.0` would print "NaN" instead of "0".
+#[allow(clippy::double_comparisons)]
 fn finding_signature(findings: &[Finding]) -> String {
     let mut parts: Vec<String> = findings
         .iter()

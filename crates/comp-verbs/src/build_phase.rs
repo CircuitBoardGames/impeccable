@@ -324,6 +324,8 @@ fn spec_regions(spec: &Value) -> Vec<Value> {
     spec.get("regions").and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
+// The lead-face check guards on `chosen.is_some()` inside an else-if chain; kept as the JS reads.
+#[allow(clippy::unnecessary_unwrap)]
 fn gate_spec(io: &Io, state: &Value) -> Gate {
     let s = self_cmd(io);
     let Some(spec) = load_spec(&abs(io, SPEC_PATH)) else {
@@ -513,7 +515,7 @@ fn gate_plates(io: &Io) -> Gate {
             let refimg = plate_reference(comp, &spec, rr);
             // composite transparent plates over the region's sampled ground
             let mut build = img.image.clone();
-            if img.image.data.chunks_exact(4).any(|pixel| pixel[3] < 255) {
+            if img.image.data.as_chunks::<4>().0.iter().any(|pixel| pixel[3] < 255) {
                 let ground = rr
                     .pointer("/palette/0/hex")
                     .and_then(Value::as_str)
@@ -586,7 +588,7 @@ fn source_files(io: &Io, limit: usize) -> Vec<String> {
     use once_cell::sync::Lazy;
     static EXTS: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"(?i)\.(html?|css|scss|jsx?|tsx?|svelte|vue|astro|mdx?|php|erb|hbs)$").unwrap());
     let mut out: Vec<String> = Vec::new();
-    fn walk(io: &Io, dir: &Path, rel: &str, depth: usize, out: &mut Vec<String>, limit: usize, skip: &std::collections::HashSet<&str>, exts: &regex::Regex) {
+    fn walk(dir: &Path, rel: &str, depth: usize, out: &mut Vec<String>, limit: usize, skip: &std::collections::HashSet<&str>, exts: &regex::Regex) {
         if out.len() >= limit || depth > 6 {
             return;
         }
@@ -605,14 +607,14 @@ fn source_files(io: &Io, limit: usize) -> Vec<String> {
             let is_dir = ty.map(|t| t.is_dir()).unwrap_or(false);
             if is_dir {
                 if !skip.contains(name.as_str()) && !name.starts_with('.') {
-                    walk(io, &e.path(), &child_rel, depth + 1, out, limit, skip, exts);
+                    walk(&e.path(), &child_rel, depth + 1, out, limit, skip, exts);
                 }
             } else if exts.is_match(&name) {
                 out.push(child_rel);
             }
         }
     }
-    walk(io, &io.cwd, "", 0, &mut out, limit, &skip, &EXTS);
+    walk(&io.cwd, "", 0, &mut out, limit, &skip, &EXTS);
     out
 }
 
@@ -1240,9 +1242,8 @@ fn gate_hero(io: &Io, state: &mut Value, build_path: &str, min: f64, out_dir: &s
         }
         let id = r.get("id").and_then(Value::as_str).unwrap_or("");
         reasons.push(format!(
-            "control {id} drifts to {}% (structure {}%, color {}%): its chrome differs from the comp's; open {} and match the border, fill, radius, chevron or arrow, and label size",
+            "control {id} drifts to {}% (structure {}%, color {}%): its chrome differs from the comp's; open {out_dir}/regions/{id}.png and match the border, fill, radius, chevron or arrow, and label size",
             pct0(rscore(r, "overall")), pct0(rscore(r, "structure")), pct0(rscore(r, "color")),
-            format!("{out_dir}/regions/{id}.png")
         ));
     }
     // control ink boxes
@@ -1484,8 +1485,7 @@ fn hero_loop_verdict(state: &mut Value, gate: &Gate, artifact_path: &str, io: &I
     if stuck && no_progress {
         let w = first_worst.unwrap();
         return Some(format!(
-            "region {w} has been the worst region for three attempts and the score moved less than 3 points: value edits are not reaching it. Open {} and rebuild that region from the comp crop (place its plate, or produce one with {s} generate-image --ref <crop.png> --prompt-file <prompt.txt> --out <plate.png>, or re-derive its structure from the spec box), then recapture.",
-            format!(".impeccable/review/diff/hero/regions/{w}.png")
+            "region {w} has been the worst region for three attempts and the score moved less than 3 points: value edits are not reaching it. Open .impeccable/review/diff/hero/regions/{w}.png and rebuild that region from the comp crop (place its plate, or produce one with {s} generate-image --ref <crop.png> --prompt-file <prompt.txt> --out <plate.png>, or re-derive its structure from the spec box), then recapture."
         ));
     }
     None
@@ -1757,8 +1757,7 @@ fn next_instruction(io: &Io, state: &Value) -> String {
             format!("Comp round for the chosen direction{dir}: read reference/visualize.md, generate three compositional comps of the requested surface at its own viewport into {MOCKS_DIR}/ (each with a prompt sidecar), put them in front of the user, and set \"approved\": true in the chosen comp's sidecar. Then {s} build-phase advance. No page code before this closes.")
         }
         "spec" => format!(
-            "Measure the comp: {s} comp-spec --comp {comp} --grid, open {}, write regions.json (every illustration, photo, texture as its own plate region; every text block its own text region), run {s} comp-spec --comp {comp} --regions regions.json. Then measure the type: {s} font-match --measure <id> for each text region (cap height, width class, weight class) and {s} font-match --rank <lead text region> --text \"<its first words>\" to choose the headline face by metrics (the USE line is the CSS; with no browser it records the catalog's nearest face, which is the choice; do not install one, and do not write a chosen face into the spec by hand). Then {s} build-phase advance.",
-            format!("{BUILD_DIR}/comp-grid.png")
+            "Measure the comp: {s} comp-spec --comp {comp} --grid, open {BUILD_DIR}/comp-grid.png, write regions.json (every illustration, photo, texture as its own plate region; every text block its own text region), run {s} comp-spec --comp {comp} --regions regions.json. Then measure the type: {s} font-match --measure <id> for each text region (cap height, width class, weight class) and {s} font-match --rank <lead text region> --text \"<its first words>\" to choose the headline face by metrics (the USE line is the CSS; with no browser it records the catalog's nearest face, which is the choice; do not install one, and do not write a chosen face into the spec by hand). Then {s} build-phase advance."
         ),
         "plates" => format!("Produce every plate in the spec ({s} comp-spec --print lists them). For each illustration, photo, or figure, run {s} comp-spec --crop <id> --out <crop.png> and save {s} comp-spec --plate-prompt <id> to a prompt file. For an isolated figure or object on the page ground, add --background transparent to that plate-prompt command. Prefer the harness image tool with the crop as reference and that prompt; request native transparent PNG for cutouts. With the API fallback, run {s} generate-image --ref <crop.png> --prompt-file <prompt.txt> --out <plate.png> --size <WxH> --quality high; add --background transparent for cutouts. Create the output directory first and choose a supported size matching the region's aspect at least 1.5x its pixel size. generate-image embeds the prompt; after a harness generation run {s} embed-prompt <plate.png> --prompt-file <prompt.txt>. Preserve white paint, fine edges, and interior holes; verify alpha and inspect the cutout on light and dark grounds. Do not chroma-key native transparent output. Keep photos and textures opaque. Place cutouts with a plain <img> over the page's own ground; inspect glass and other translucent material carefully. Textures (paper, cloth, grain): crop a clean patch from {s} comp-spec --crop <id> --raw and mirror-tile it to the plate size; generate only when no clean patch exists. The gate scores a texture against its whole region box, so draw its region around clean ground. Then {s} build-phase advance scores all plates against their comp regions. A pass does not replace visual inspection of placement, scale, and alpha. Write no page code before this passes."),
         "hero" => format!(
@@ -1770,114 +1769,6 @@ fn next_instruction(io: &Io, state: &Value) -> String {
         "responsive" => format!("Build the other viewports (mobile first if the surface is mobile). The first viewport must hold at common desktop widths (1280 to 1600), not only at the comp's exact size: fluid columns, no fixed-px grid that wraps 96px narrower. Settle or disable entrance motion before capturing (an element mid-animation reads as missing). Capture desktop.png (1440 wide, full page) and mobile.png (390 wide, full page) into .impeccable/review/; the gate diffs the top of desktop.png (scaled to the comp's width) against the comp. Then {s} build-phase advance."),
         "review" => format!("Spawn the finish reviewer with the state file, the hero diff report, and the captures; record its disposition with {s} build-phase finish --disposition <word>."),
         _ => String::new(),
-    }
-}
-
-#[cfg(test)]
-mod transparency_guidance_tests {
-    use super::*;
-
-    #[test]
-    fn plate_gate_scores_sparse_and_partial_alpha_on_the_sampled_ground() {
-        let dir = std::env::temp_dir().join(format!("impeccable-plate-alpha-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join(BUILD_DIR)).unwrap();
-        let (io, _) = Io::captured("", dir.clone(), Default::default());
-        let spec = json!({"comp": "comp.png", "regions": [{
-            "id": "art", "kind": "plate", "medium": "raster", "plate": "plate.png",
-            "px": {"x": 0, "y": 0, "w": 64, "h": 64},
-            "palette": [{"hex": "#183040"}]
-        }]});
-        std::fs::write(dir.join(SPEC_PATH), spec.to_string()).unwrap();
-        for partial in [false, true] {
-            let mut plate = r::create_image(64, 64, [200, 130, 80, 255]);
-            for (i, pixel) in plate.data.chunks_exact_mut(4).enumerate() {
-                if (i / 64 + i % 64) % 16 < 8 {
-                    pixel[..3].copy_from_slice(&[70, 160, 210]);
-                }
-                if partial {
-                    pixel[3] = 160; // No pixels below the old 128 cutoff.
-                } else if i / 64 < 8 && i % 64 < 8 {
-                    pixel.copy_from_slice(&[255, 0, 255, 0]); // Only 1.56% clear.
-                }
-            }
-            let mut flattened = r::create_image(64, 64, [24, 48, 64, 255]);
-            r::blit(&mut flattened, &plate, 0.0, 0.0);
-            std::fs::write(dir.join("comp.png"), png_io::encode_png(&flattened, &[]).unwrap()).unwrap();
-            // Exclude the separate anti-crop gate: this checks the score's ground.
-            let metadata = [("impeccable:fake".into(), "1".into())];
-            std::fs::write(dir.join("plate.png"), png_io::encode_png(&plate, &metadata).unwrap()).unwrap();
-            let alpha_score = gate_plates(&io).plates.unwrap()[0]["score"].as_f64().unwrap();
-            std::fs::write(dir.join("plate.png"), png_io::encode_png(&flattened, &metadata).unwrap()).unwrap();
-            let opaque_score = gate_plates(&io).plates.unwrap()[0]["score"].as_f64().unwrap();
-            assert!((alpha_score - opaque_score).abs() < 1e-9, "partial={partial}: {alpha_score} != {opaque_score}");
-        }
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn missing_plate_guidance_uses_the_configured_launcher() {
-        let dir = std::env::temp_dir().join(format!("impeccable-plate-launcher-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join(BUILD_DIR)).unwrap();
-        std::fs::write(dir.join(SPEC_PATH), json!({"regions": [{"id": "art", "medium": "raster", "plate": "missing.png"}]}).to_string()).unwrap();
-        let env = [("IMPECCABLE_SELF".into(), "/custom/impeccable".into())].into();
-        let (io, _) = Io::captured("", dir.clone(), env);
-        let reasons = gate_plates(&io).reasons.join("\n");
-        std::fs::remove_dir_all(dir).unwrap();
-        assert!(reasons.contains("/custom/impeccable comp-spec --crop art"), "{reasons}");
-        assert!(reasons.contains("/custom/impeccable generate-image --ref"), "{reasons}");
-    }
-
-    #[test]
-    fn launcher_paths_are_quoted_but_command_prefixes_are_preserved() {
-        let dir = std::env::temp_dir().join(format!("impeccable-launcher-quoting-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join("my tools")).unwrap();
-        let relative = if cfg!(windows) { "my tools/impeccable.cmd" } else { "my tools/impeccable" };
-        let launcher = dir.join(relative);
-        std::fs::write(&launcher, "").unwrap();
-        for value in [relative.to_string(), launcher.to_string_lossy().into_owned()] {
-            let env = [("IMPECCABLE_SELF".into(), value.clone())].into();
-            let (io, _) = Io::captured("", dir.clone(), env);
-            let quote = if cfg!(windows) { '"' } else { '\'' };
-            let expected = format!("{quote}{value}{quote}");
-            assert_eq!(self_cmd(&io), expected);
-            let next = next_instruction(&io, &json!({"phase": "plates"}));
-            assert!(next.contains(&format!("{expected} generate-image --ref")), "{next}");
-        }
-        for value in ["impeccable", "npx impeccable", "bunx impeccable", "npx --yes impeccable"] {
-            let env = [("IMPECCABLE_SELF".into(), value.into())].into();
-            let (io, _) = Io::captured("", dir.clone(), env);
-            assert_eq!(self_cmd(&io), value);
-        }
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn printed_launcher_path_survives_shell_parsing() {
-        use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("impeccable-launcher-shell-{}", std::process::id()));
-        let launcher = dir.join("user's $assets `literal`/impeccable");
-        std::fs::create_dir_all(launcher.parent().unwrap()).unwrap();
-        std::fs::write(&launcher, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
-        std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let env = [("IMPECCABLE_SELF".into(), launcher.to_string_lossy().into_owned())].into();
-        let (io, _) = Io::captured("", dir.clone(), env);
-        let command = format!("{} generate-image --background transparent", self_cmd(&io));
-        let output = std::process::Command::new("/bin/sh").arg("-c").arg(command).current_dir(&dir).output().unwrap();
-        std::fs::remove_dir_all(dir).unwrap();
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        assert_eq!(String::from_utf8(output.stdout).unwrap(), "generate-image\n--background\ntransparent\n");
-    }
-
-    #[test]
-    fn plates_use_supported_reference_edit_and_native_alpha_commands() {
-        let (io, _) = Io::captured("", std::env::temp_dir(), Default::default());
-        let instruction = next_instruction(&io, &json!({"phase": "plates"}));
-        assert!(instruction.contains("--background transparent"));
-        assert!(instruction.contains("--ref"));
-        assert!(instruction.contains("--prompt-file"));
-        assert!(!instruction.contains("generate-image --plate"));
-        assert!(!instruction.contains("PLATE-CHROMA"));
     }
 }
 
@@ -2152,5 +2043,113 @@ pub fn run(argv: &[String], io: &mut Io, organic_scan: OrganicScan) -> i32 {
             io.err(&format!("build-phase: unknown command {other}\n"));
             1
         }
+    }
+}
+
+#[cfg(test)]
+mod transparency_guidance_tests {
+    use super::*;
+
+    #[test]
+    fn plate_gate_scores_sparse_and_partial_alpha_on_the_sampled_ground() {
+        let dir = std::env::temp_dir().join(format!("impeccable-plate-alpha-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(BUILD_DIR)).unwrap();
+        let (io, _) = Io::captured("", dir.clone(), Default::default());
+        let spec = json!({"comp": "comp.png", "regions": [{
+            "id": "art", "kind": "plate", "medium": "raster", "plate": "plate.png",
+            "px": {"x": 0, "y": 0, "w": 64, "h": 64},
+            "palette": [{"hex": "#183040"}]
+        }]});
+        std::fs::write(dir.join(SPEC_PATH), spec.to_string()).unwrap();
+        for partial in [false, true] {
+            let mut plate = r::create_image(64, 64, [200, 130, 80, 255]);
+            for (i, pixel) in plate.data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                if (i / 64 + i % 64) % 16 < 8 {
+                    pixel[..3].copy_from_slice(&[70, 160, 210]);
+                }
+                if partial {
+                    pixel[3] = 160; // No pixels below the old 128 cutoff.
+                } else if i / 64 < 8 && i % 64 < 8 {
+                    pixel.copy_from_slice(&[255, 0, 255, 0]); // Only 1.56% clear.
+                }
+            }
+            let mut flattened = r::create_image(64, 64, [24, 48, 64, 255]);
+            r::blit(&mut flattened, &plate, 0.0, 0.0);
+            std::fs::write(dir.join("comp.png"), png_io::encode_png(&flattened, &[]).unwrap()).unwrap();
+            // Exclude the separate anti-crop gate: this checks the score's ground.
+            let metadata = [("impeccable:fake".into(), "1".into())];
+            std::fs::write(dir.join("plate.png"), png_io::encode_png(&plate, &metadata).unwrap()).unwrap();
+            let alpha_score = gate_plates(&io).plates.unwrap()[0]["score"].as_f64().unwrap();
+            std::fs::write(dir.join("plate.png"), png_io::encode_png(&flattened, &metadata).unwrap()).unwrap();
+            let opaque_score = gate_plates(&io).plates.unwrap()[0]["score"].as_f64().unwrap();
+            assert!((alpha_score - opaque_score).abs() < 1e-9, "partial={partial}: {alpha_score} != {opaque_score}");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn missing_plate_guidance_uses_the_configured_launcher() {
+        let dir = std::env::temp_dir().join(format!("impeccable-plate-launcher-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(BUILD_DIR)).unwrap();
+        std::fs::write(dir.join(SPEC_PATH), json!({"regions": [{"id": "art", "medium": "raster", "plate": "missing.png"}]}).to_string()).unwrap();
+        let env = [("IMPECCABLE_SELF".into(), "/custom/impeccable".into())].into();
+        let (io, _) = Io::captured("", dir.clone(), env);
+        let reasons = gate_plates(&io).reasons.join("\n");
+        std::fs::remove_dir_all(dir).unwrap();
+        assert!(reasons.contains("/custom/impeccable comp-spec --crop art"), "{reasons}");
+        assert!(reasons.contains("/custom/impeccable generate-image --ref"), "{reasons}");
+    }
+
+    #[test]
+    fn launcher_paths_are_quoted_but_command_prefixes_are_preserved() {
+        let dir = std::env::temp_dir().join(format!("impeccable-launcher-quoting-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("my tools")).unwrap();
+        let relative = if cfg!(windows) { "my tools/impeccable.cmd" } else { "my tools/impeccable" };
+        let launcher = dir.join(relative);
+        std::fs::write(&launcher, "").unwrap();
+        for value in [relative.to_string(), launcher.to_string_lossy().into_owned()] {
+            let env = [("IMPECCABLE_SELF".into(), value.clone())].into();
+            let (io, _) = Io::captured("", dir.clone(), env);
+            let quote = if cfg!(windows) { '"' } else { '\'' };
+            let expected = format!("{quote}{value}{quote}");
+            assert_eq!(self_cmd(&io), expected);
+            let next = next_instruction(&io, &json!({"phase": "plates"}));
+            assert!(next.contains(&format!("{expected} generate-image --ref")), "{next}");
+        }
+        for value in ["impeccable", "npx impeccable", "bunx impeccable", "npx --yes impeccable"] {
+            let env = [("IMPECCABLE_SELF".into(), value.into())].into();
+            let (io, _) = Io::captured("", dir.clone(), env);
+            assert_eq!(self_cmd(&io), value);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn printed_launcher_path_survives_shell_parsing() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("impeccable-launcher-shell-{}", std::process::id()));
+        let launcher = dir.join("user's $assets `literal`/impeccable");
+        std::fs::create_dir_all(launcher.parent().unwrap()).unwrap();
+        std::fs::write(&launcher, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
+        std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let env = [("IMPECCABLE_SELF".into(), launcher.to_string_lossy().into_owned())].into();
+        let (io, _) = Io::captured("", dir.clone(), env);
+        let command = format!("{} generate-image --background transparent", self_cmd(&io));
+        let output = std::process::Command::new("/bin/sh").arg("-c").arg(command).current_dir(&dir).output().unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), "generate-image\n--background\ntransparent\n");
+    }
+
+    #[test]
+    fn plates_use_supported_reference_edit_and_native_alpha_commands() {
+        let (io, _) = Io::captured("", std::env::temp_dir(), Default::default());
+        let instruction = next_instruction(&io, &json!({"phase": "plates"}));
+        assert!(instruction.contains("--background transparent"));
+        assert!(instruction.contains("--ref"));
+        assert!(instruction.contains("--prompt-file"));
+        assert!(!instruction.contains("generate-image --plate"));
+        assert!(!instruction.contains("PLATE-CHROMA"));
     }
 }

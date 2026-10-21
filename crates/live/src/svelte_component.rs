@@ -490,6 +490,8 @@ pub fn extract_matching_source_css(
 }
 
 /// JS: scaffoldSvelteComponentInsertSession({...})
+// Positional parameters kept; an options struct would only rename the same inputs.
+#[allow(clippy::too_many_arguments)]
 pub fn scaffold_svelte_component_insert_session(
     id: &str,
     count: i64,

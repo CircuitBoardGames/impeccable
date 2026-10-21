@@ -84,7 +84,7 @@ pub fn build_search_queries(
             let joined = list.join(" ");
             let mut sorted = list.clone();
             // Array.prototype.sort is stable; longest first.
-            sorted.sort_by(|a, b| b.encode_utf16().count().cmp(&a.encode_utf16().count()));
+            sorted.sort_by_key(|c| std::cmp::Reverse(c.encode_utf16().count()));
             queries.push(format!("class=\"{}\"", joined));
             queries.push(format!("className=\"{}\"", joined));
             for c in sorted {

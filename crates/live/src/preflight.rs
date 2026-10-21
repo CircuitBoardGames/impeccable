@@ -215,8 +215,7 @@ pub fn compact_error(stderr: &str, message: Option<&str>) -> String {
     let last = stderr
         .trim()
         .split('\n')
-        .filter(|l| !l.is_empty())
-        .last()
+        .rfind(|l| !l.is_empty())
         .map(String::from);
     let msg = last
         .or_else(|| message.map(String::from))

@@ -56,6 +56,8 @@ pub fn grid_to_box(span: &str) -> Result<(f64, f64, f64, f64), String> {
 }
 
 /// JS: renderGrid(comp).
+// `c` is both the column label index and a pixel coordinate.
+#[allow(clippy::needless_range_loop)]
 pub fn render_grid(comp: &Image) -> Image {
     let target_w = 1536f64.min(comp.width as f64);
     let mut img = r::resize(comp, target_w, round((comp.height as f64 / comp.width as f64) * target_w));
@@ -340,6 +342,8 @@ pub fn snap_box_to_ink(comp: &Image, boxf: (f64, f64, f64, f64), ground: f64) ->
 }
 
 /// JS: uncoveredInkCells(comp, regions).
+// `c` is both the column label index and the grid cell offset.
+#[allow(clippy::needless_range_loop)]
 fn uncovered_ink_cells(comp: &Image, regions: &[Value]) -> Vec<String> {
     let grid = m::detail_grid(comp, 10, 10, 512);
     let mut energies: Vec<f64> = grid.cells.iter().map(|&v| v as f64).collect();

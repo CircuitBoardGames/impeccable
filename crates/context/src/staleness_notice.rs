@@ -83,6 +83,8 @@ pub fn staleness_check_disabled(env: &Env, roots: &[Option<&str>]) -> bool {
 }
 
 /// JS: filterFreshFindings(findings, { projectRoot, now })
+// `!(a >= b)` is deliberately true for NaN (JS comparison semantics); `<` would flip it.
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 pub fn filter_fresh_findings(env: &Env, findings: Vec<Finding>, project_root: &str, now: f64) -> Vec<Finding> {
     if findings.is_empty() {
         return vec![];

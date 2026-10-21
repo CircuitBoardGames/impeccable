@@ -201,7 +201,7 @@ pub fn read_concept_catalog(catalog_path: &str, reviews_path: &str) -> Option<Co
     if review_data.is_null() {
         return None;
     }
-    let reviews = obj_get(&review_data, "reviews").cloned().filter(|r| crate::staleness::js_truthy(r)).unwrap_or(Value::Object(Map::new()));
+    let reviews = obj_get(&review_data, "reviews").cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::Object(Map::new()));
     let wells: HashMap<String, Value> = obj_get(&catalog, "wells")
         .and_then(|w| w.as_array())
         .map(|a| a.iter().filter_map(|w| s(w.get("id")).map(|id| (id.to_string(), w.clone()))).collect())
@@ -216,12 +216,12 @@ pub fn read_concept_catalog(catalog_path: &str, reviews_path: &str) -> Option<Co
             let review = reviews.get(cid).cloned().filter(|r| !r.is_null());
             m.insert("familyId".into(), family.get("id").cloned().unwrap_or(Value::Null));
             m.insert("familyLabel".into(), family.get("label").cloned().unwrap_or(Value::Null));
-            m.insert("wellId".into(), family.get("well").cloned().filter(|v| crate::staleness::js_truthy(v)).unwrap_or(Value::Null));
-            m.insert("wellLabel".into(), well.and_then(|w| w.get("label")).cloned().filter(|v| crate::staleness::js_truthy(v)).unwrap_or(Value::Null));
-            m.insert("wellTier".into(), well.and_then(|w| w.get("tier")).cloned().filter(|v| crate::staleness::js_truthy(v)).unwrap_or(Value::Null));
+            m.insert("wellId".into(), family.get("well").cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::Null));
+            m.insert("wellLabel".into(), well.and_then(|w| w.get("label")).cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::Null));
+            m.insert("wellTier".into(), well.and_then(|w| w.get("tier")).cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::Null));
             m.insert(
                 "status".into(),
-                review.as_ref().and_then(|r| r.get("status")).cloned().filter(|v| crate::staleness::js_truthy(v)).unwrap_or(Value::String("pending".into())),
+                review.as_ref().and_then(|r| r.get("status")).cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::String("pending".into())),
             );
             m.insert("review".into(), review.unwrap_or(Value::Null));
             concepts.push(Value::Object(m));
@@ -498,7 +498,7 @@ pub fn read_composition_catalog(catalog_path: &str, reviews_path: &str) -> Optio
     if review_data.is_null() || catalog.is_null() {
         return None;
     }
-    let reviews = obj_get(&review_data, "reviews").cloned().filter(|r| crate::staleness::js_truthy(r)).unwrap_or(Value::Object(Map::new()));
+    let reviews = obj_get(&review_data, "reviews").cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::Object(Map::new()));
     let families: HashMap<String, Value> = obj_get(&catalog, "families")
         .and_then(|f| f.as_array())
         .map(|a| a.iter().filter_map(|f| s(f.get("id")).map(|id| (id.to_string(), f.clone()))).collect())
@@ -513,10 +513,10 @@ pub fn read_composition_catalog(catalog_path: &str, reviews_path: &str) -> Optio
             let fam = families.get(s(c.get("familyId")).unwrap_or(""));
             let cid = s(c.get("id")).unwrap_or("");
             let review = reviews.get(cid).cloned().filter(|r| !r.is_null());
-            m.insert("familyLabel".into(), fam.and_then(|f| f.get("label")).cloned().filter(|v| crate::staleness::js_truthy(v)).unwrap_or(Value::Null));
+            m.insert("familyLabel".into(), fam.and_then(|f| f.get("label")).cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::Null));
             m.insert(
                 "status".into(),
-                review.as_ref().and_then(|r| r.get("status")).cloned().filter(|v| crate::staleness::js_truthy(v)).unwrap_or(Value::String("pending".into())),
+                review.as_ref().and_then(|r| r.get("status")).cloned().filter(crate::staleness::js_truthy).unwrap_or(Value::String("pending".into())),
             );
             m.insert("review".into(), review.unwrap_or(Value::Null));
             Value::Object(m)
