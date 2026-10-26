@@ -779,12 +779,6 @@ pub fn run_stop_hook(rt: &Runtime, stdin: &str) -> RunResult {
         if *root != session_cwd {
             root_audit.insert("cwd".into(), Value::String(root.clone()));
         }
-<<<<<<< HEAD
-        if has_path_traversal(file_path)
-            || is_sensitive_path(file_path)
-            || is_generated_path_in(rt, file_path, &project_cwd)
-        {
-=======
         let at_session_cwd = *root == session_cwd;
         let root_config = if at_session_cwd { config.clone() } else { read_config(root) };
         if !root_config.enabled {
@@ -792,7 +786,6 @@ pub fn run_stop_hook(rt: &Runtime, stdin: &str) -> RunResult {
                 &root_audit,
                 vec![("skipped", Value::from("config-disabled")), ("durationMs", ms_since(started))],
             ));
->>>>>>> upstream/main
             continue;
         }
         let mut root_cache = if at_session_cwd { cache.clone() } else { read_cache(root) };
