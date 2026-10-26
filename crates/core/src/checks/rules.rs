@@ -841,13 +841,20 @@ pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
     if opts.has_direct_text && opts.text_color.is_some() && !opts.is_emoji_only {
         let text_color = opts.text_color.unwrap();
         // Gradient-clipped text paints the gradient, not `color`, so there
-        // is no background to score it against. Text with no letter and no
+        // is no background to score it against: `text`, or one `text` per
+        // layer (stripe.com's stats compute `text, text` under two gradients,
+        // and white was scored against the gradient they paint,
+        // observations-craft-1009 row 6). Where the adapter says the glyphs
+        // paint no colour of their own (`ink_unread`: a transparent fill, or
+        // an ancestor's background clipped to the text), the same holds.
+        // Text with no letter and no
         // digit (a lone circle, a pair of braces) is not read, which the
         // SAFE_TAGS path already says through `paints_own_text`.
         // A surface in exactly the text's own colour is the walk landing on
         // a fill the text does not sit on, the same guard the SAFE_TAGS path
         // applies (`resolved_bg_matches_text`).
-        if bg_clip != "text"
+        if !background_clips_to_text(bg_clip)
+            && !opts.ink_unread
             && !opts.is_glyph_only
             && !(opts.same_color_surface_is_unread && resolved_bg_matches_text(opts, &text_color))
         {
@@ -1067,7 +1074,7 @@ fn safe_tag_text_contrast(opts: &ColorOpts) -> Vec<RuleHit> {
         return Vec::new();
     }
     // Gradient-clipped text paints the gradient, not `color`.
-    if opts.bg_clip.as_deref() == Some("text") {
+    if opts.bg_clip.as_deref().is_some_and(background_clips_to_text) {
         return Vec::new();
     }
     let Some(text_color) = opts.text_color else {
@@ -1404,6 +1411,46 @@ fn contrast_findings(opts: &ColorOpts, text_color: &Rgba) -> Vec<RuleHit> {
         }
     }
     findings
+}
+
+/// Contrast for text whose glyphs paint a gradient (`background-clip:
+/// text` under a transparent fill), against the solid `ground` the box sits
+/// on. Which stop shows under which glyph depends on the gradient's size
+/// and position, so the text is scored by the stop that reads best, and
+/// reports only where even that one fails: a pale cyan-to-violet tagline on
+/// a lavender panel (interplanetaryfund.base44.app, best stop 2.45:1). A
+/// gradient with a translucent stop, a picture layer, or no stop the parser
+/// reads is not scored, and neither is a translucent ground.
+pub fn clipped_gradient_text_contrast(bg_image: &str, ground: &Rgba, threshold: f64) -> Option<RuleHit> {
+    if ground.alpha_or_one() < 0.999 || bg_image.contains("url(") || !bg_image.contains("gradient") {
+        return None;
+    }
+    let stops = crate::color::parse_gradient_colors(Some(bg_image));
+    if stops.is_empty() || stops.iter().any(|s| s.alpha_or_one() < 0.999) {
+        return None;
+    }
+    let (best, ratio) = stops
+        .iter()
+        .map(|s| (*s, contrast_ratio(s, ground)))
+        .fold(None::<(Rgba, f64)>, |acc, cur| match acc {
+            Some(a) if a.1 >= cur.1 => Some(a),
+            _ => Some(cur),
+        })?;
+    if ratio >= threshold {
+        return None;
+    }
+    let mut hit = RuleHit::new(
+        "low-contrast",
+        format!(
+            "{}:1 (need {}:1) — gradient text, best stop {} on {}",
+            crate::color::ratio_label(ratio, threshold),
+            number_to_string(threshold),
+            color_to_hex(Some(&best)),
+            color_to_hex(Some(ground))
+        ),
+    );
+    hit.severity = contrast_severity(ratio, threshold);
+    Some(hit)
 }
 
 /// Placeholder text contrast, sibling of `check_hover_contrast`. Skips the
@@ -1968,6 +2015,23 @@ fn glow_extent_px(blur: f64, spread: f64) -> f64 {
 /// 28) is still reported.
 pub const GLOW_MIN_LIFT: f64 = 20.0;
 
+/// The HSL lightness under which a shadow colour darker than its surface is
+/// shade rather than coloured light: navy `#001d38` (0.11) under a tile on a
+/// teal band. Run 1004's judged glows on light grounds (a `#3b82f6` map
+/// marker halo, an `#ff6a28` focus glow, both 0.58 or more) read as light.
+const GLOW_SHADE_MAX_LIGHTNESS: f64 = 0.25;
+
+/// How far, in degrees of hue, a dark shadow may sit from its surface and
+/// still read as that surface's shade: navy `#001d38` (209deg) on teal
+/// (175deg) is 34deg away; rose-950 (343deg) and purple-950 (274deg) on the
+/// same teal read as coloured shadows.
+const GLOW_SHADE_MAX_HUE_DISTANCE: f64 = 50.0;
+
+fn hue_distance(a: f64, b: f64) -> f64 {
+    let d = (a - b).abs() % 360.0;
+    d.min(360.0 - d)
+}
+
 /// The share of the shadow colour's alpha a blurred shadow carries at the
 /// edge of its box.
 const GLOW_EDGE_DENSITY: f64 = 0.5;
@@ -2012,7 +2076,9 @@ pub(crate) fn glow_is_perceptible(
 }
 
 /// How far the chromatic layers of one shadow value lift `surface` at the
-/// edge of the box (see [`GLOW_MIN_LIFT`]). Neutral layers are elevation, not
+/// edge of the box (see [`GLOW_MIN_LIFT`]). A dark layer
+/// ([`GLOW_SHADE_MAX_LIGHTNESS`]) cast darker than the surface, in about its
+/// hue ([`GLOW_SHADE_MAX_HUE_DISTANCE`]), lifts nothing. Neutral layers are elevation, not
 /// glow light, and do not count, and neither does a layer carrying under half
 /// the light a glow needs ([`GLOW_MIN_STRENGTH_PX`]): Tailwind's `shadow-lg`
 /// in a 0.2 purple adds a 6px layer at 1.2px of light to its 15px one, and
@@ -2027,10 +2093,28 @@ fn glow_surface_lift(value: &str, surface: &Rgba, element_opacity: Option<f64>) 
             let color = info.color?;
             let vals = extract_shadow_lengths(layer, Some((info.start, info.end)));
             let blur = vals.get(2).copied().unwrap_or(0.0);
-            (blur * color.alpha_or_one() * opacity >= GLOW_MIN_STRENGTH_PX / 2.0).then_some(color)
+            let offset = vals.first().copied().unwrap_or(0.0) != 0.0 || vals.get(1).copied().unwrap_or(0.0) != 0.0;
+            (blur * color.alpha_or_one() * opacity >= GLOW_MIN_STRENGTH_PX / 2.0).then_some((color, offset))
         })
-        .filter(|color| has_chroma(Some(color), Some(30.0)))
-        .map(|color| {
+        .filter(|(color, _)| has_chroma(Some(color), Some(30.0)))
+        .map(|(color, offset)| {
+            // A dark shadow cast darker than its surface, in about the
+            // surface's own hue, is shade, not light: a navy drop shadow at
+            // 20% under the logo tiles on a teal band
+            // (v0-morbiawebsite.vercel.app) lifted it like a teal glow when
+            // scored as a distance. A colour bright enough to read as light
+            // keeps the distance (a blue halo on a white map still tints
+            // it), and so does a dark shadow in a hue of its own (a maroon
+            // smear on teal reads as coloured) and a zero-offset halo, which
+            // is not cast.
+            let shade = offset
+                && lightness_saturation(&color).0 < GLOW_SHADE_MAX_LIGHTNESS
+                && relative_luminance(&color) < relative_luminance(surface)
+                && has_chroma(Some(surface), Some(30.0))
+                && hue_distance(get_hue(Some(&color)), get_hue(Some(surface))) <= GLOW_SHADE_MAX_HUE_DISTANCE;
+            if shade {
+                return 0.0;
+            }
             let difference = (color.r - surface.r)
                 .abs()
                 .max((color.g - surface.g).abs())
@@ -2881,6 +2965,39 @@ mod tests {
         assert!(!flags(&opts(false, false)));
     }
 
+    /// stripe.com's stats: white `h4`s under two gradients clipped to the
+    /// text compute `background-clip: text, text`. Clipped on every layer,
+    /// the gradient paints the glyphs and white is not scored against it, on
+    /// either path; gradient-text still reads the gradient. A stack that
+    /// clips one layer to a box paints that layer as a fill and is scored.
+    #[test]
+    fn a_text_clip_on_every_layer_takes_no_contrast_verdict() {
+        let white = Rgba::new(255.0, 255.0, 255.0, 1.0);
+        let pale = Rgba::new(216.0, 221.0, 245.0, 1.0);
+        let image = "linear-gradient(90deg, rgb(255, 120, 60), rgb(255, 80, 160)), linear-gradient(rgb(216, 221, 245), rgb(172, 167, 251))";
+        let opts = |tag: &str, clip: &str| ColorOpts {
+            tag: tag.to_string(),
+            text_color: Some(white),
+            effective_bg: Some(pale),
+            font_size: 40.0,
+            font_weight: 600.0,
+            has_direct_text: true,
+            paints_own_text: true,
+            detector_is_browser: true,
+            bg_clip: Some(clip.to_string()),
+            bg_image: Some(image.to_string()),
+            ..Default::default()
+        };
+        let low = |o: &ColorOpts| check_colors(o).iter().any(|h| h.id == "low-contrast");
+        assert!(!low(&opts("h4", "text, text")));
+        assert!(!low(&opts("span", "text, text")));
+        assert!(low(&opts("h4", "text, border-box")));
+        // Glyphs whose fill the adapter says is transparent take none either.
+        let unread = ColorOpts { bg_clip: Some("border-box".into()), ink_unread: true, ..opts("em", "") };
+        assert!(!low(&unread));
+        assert!(low(&ColorOpts { ink_unread: false, ..unread }));
+    }
+
     #[test]
     fn the_full_pass_guard_is_opt_in() {
         let white = Rgba::new(255.0, 255.0, 255.0, 1.0);
@@ -3067,6 +3184,44 @@ mod tests {
             hover(pale, white, 16.0)[0].snippet,
             ":hover state 2.6:1 (need 4.5:1) — text #a0a0a0 on #ffffff"
         );
+    }
+
+    #[test]
+    fn a_shadow_darker_than_its_surface_lifts_nothing() {
+        let glow = |shadow: &str, surface: Rgba| {
+            check_glow(&GlowOpts {
+                box_shadow: Some(shadow.to_string()),
+                text_shadow: None,
+                effective_bg: Some(Rgba::new(10.0, 40.0, 50.0, 1.0)),
+                element_opacity: Some(1.0),
+                element_size: Some((160.0, 72.0)),
+                surface: Some(surface),
+            })
+        };
+        let teal = Rgba::new(13.0, 148.0, 136.0, 1.0);
+        // v0-morbiawebsite.vercel.app's navy drop shadow under pale logo
+        // tiles on a teal band (at 0.4 here, where the distance it was read
+        // as clears the lift floor): dark and darker than the band, so no
+        // light.
+        assert!(glow("rgba(0, 29, 56, 0.4) 0px 12px 28px 0px", teal).is_empty());
+        // The same blur and alpha in a light cyan lifts it.
+        assert_eq!(glow("rgba(103, 232, 249, 0.6) 0px 12px 28px 0px", teal).len(), 1);
+        // Neon on near-black is unchanged.
+        let ink = Rgba::new(10.0, 10.0, 10.0, 1.0);
+        assert_eq!(glow("rgba(0, 169, 255, 0.6) 0px 0px 24px 0px", ink).len(), 1);
+        // A blue halo on a white map tints it: bright enough to read as
+        // light, so it keeps the distance (run 1004's map markers).
+        let white = Rgba::new(255.0, 255.0, 255.0, 1.0);
+        assert_eq!(glow("rgba(59, 130, 246, 0.6) 0px 0px 24px 0px", white).len(), 1);
+        // A dark shadow in a hue of its own is a coloured shadow: rose-950
+        // and purple-950 on the teal band.
+        assert_eq!(glow("rgba(76, 5, 25, 0.9) 0px 12px 40px 0px", teal).len(), 1);
+        assert_eq!(glow("rgba(59, 7, 100, 0.9) 0px 12px 40px 0px", teal).len(), 1);
+        // A zero-offset navy halo is not cast: not shade, whatever its hue.
+        assert_eq!(glow("rgba(0, 29, 56, 0.4) 0px 0px 28px 0px", teal).len(), 1);
+        // On a neutral surface no hue says shade: the distance decides, as
+        // before.
+        assert_eq!(glow("rgba(0, 29, 56, 0.6) 0px 8px 24px 0px", white).len(), 1);
     }
 
     #[test]
